@@ -1,5 +1,28 @@
 import random
 import numpy as np
+import configs
+
+
+class Root():
+
+    def __init__(self, dict=None):
+        self.ID = ''
+        self.depth = 0
+        if (configs is None):
+            dict = {
+                'input_size': 4,
+                'output_size': 2,
+                'feedforward': True,
+                'weight_mean': 0,
+                'weight_std': 1,
+                'perturb_std': 0.2,
+            }
+        self.configs = configs.Configs(dict)
+
+    def generate(self):
+        self.child = Div(self)
+        self.child.generate()
+
 
 class TreeNode():
 
@@ -7,11 +30,16 @@ class TreeNode():
         self.parent = parent
         self.ID = parent.ID
         self.depth = parent.depth
+        self.configs = parent.configs
+        reset()
+
+    def reset(self):
         self.child = [None, None, None]
         self.neuronList = []
         self.connList = []
+        self.inList = []
+        self.outList = []
         self.rule = -1
-        self.configs = parent.configs
 
     def mutate(self, configs):
         return
@@ -25,34 +53,31 @@ class TreeNode():
     def compile(self):
         return
 
-    def merge_from_children(self):
-        if hasattr(self, 'neuronList'):
-            for c in self.child:
-                if (c is not None):
-                    self.neuronList += c.neuronList
-        if hasattr(self, 'connList'):
-            for c in self.child:
-                if (c is not None):
-                    self.connList += c.connList
+    def update(self):
+        self.depth = self.parent.depth
+        for c in self.child:
+            if (c is not None):
+                c.update()
+        return
 
-
-class Root():
-
-    def __init__(self, configs=None):
-        self.ID = ''
-        self.depth = 0
-        if (configs is None):
-            self.configs = {
-                'input_size': 4,
-                'output_size': 2
-            }
+    def max_depth_from_current(self):
+        if (self.child[0] is not None):
+            left_depth = max_depth_from_current(self.child[0])
         else:
-            self.configs = configs
+            left_depth = self.depth
+        if (self.child[1] is not None):
+            right_depth = max_depth_from_current(self.child[1])
+        else:
+            right_depth = self.depth
+        return max(left_depth, right_depth)
 
-    def generate(self):
-        self.child = [Div(self), Conns(self)]
-        self.child[0].generate()
-        self.child[1].generate()
+    def merge_from_children(self):
+        for c in self.child:
+            if (c is not None):
+                self.neuronList += c.neuronList
+                self.connList += c.connList
+                self.outList += c.outList
+                self.inList += c.inList
 
 
 class Div(TreeNode):
@@ -97,6 +122,7 @@ class Div(TreeNode):
         super().generate()
 
     def compile(self):
+        self.reset()
         if (self.rule == 3):
             self.child[1].compile()
             self.child[0].compile()
@@ -107,12 +133,16 @@ class Div(TreeNode):
             self.child[2].compile()
         self.merge_from_children()
 
+    def update_depth(self):
+        self.depth = self.parent.depth + 1
+
 
 class Clones(TreeNode):
 
     def __init__(self, parent, sibling):
         super().__init__(parent)
         self.sibling = sibling
+        self.depth += 1
 
     def generate(self):
         number = random.random()
@@ -130,12 +160,16 @@ class Clones(TreeNode):
         super().generate()
 
     def compile(self):
+        self.reset()
         if (self.rule == 0):
             self.child[0].compile()
             self.child[1].compile()
         else:
             self.child[0].compile()
         merge_from_children()
+
+    def update_depth(self):
+        self.depth = self.parent.depth + 1
 
 
 class Clone(TreeNode):
@@ -148,7 +182,6 @@ class Clone(TreeNode):
         self.permo = np.random((self.configs['output_size'],))
 
     def compile(self):
-        
 
 
 class Conns(TreeNode):
@@ -179,4 +212,60 @@ class Cell(TreeNode):
     def __init__(self, parent):
         super().__init__(parent)
 
+    def generate(self):
+        self.child[0] = In(self)
+        self.child[1] = Out(self)
+        super.generate()
+
     def compile(self):
+        self.reset()
+        self.neuronList = [self.ID]
+        self.child[0].compile()
+        self.child[1].compile()
+        self.merge_from_children()
+
+
+class In(TreeNode):
+    def __init__(self, parent):
+        super().__init__(parent)
+
+    def generate(self):
+        number = random.random()
+        if (number < 0.5):
+            # Rule #0 No connection
+            self.rule = 0
+        else:
+            # Rule #1 In -> IO in?
+            self.rule = 1
+            self.source = random.choice(range(0, self.configs.input_size))
+            mean = self.configs.weight_mean
+            std = self.configs.weight_std
+            self.weight = np.random.normal(mean, std)
+
+    def compile(self):
+        self.reset()
+        if (self.rule == 1):
+            self.inList.append([self.source, self.ID, self.weight])
+
+
+class Out(TreeNode):
+    def __init__(self, parent):
+        super().__init__(parent)
+
+    def generate(self):
+        number = random.random()
+        if (number < 0.5):
+            # Rule #0 No connection
+            self.rule = 0
+        else:
+            # Rule #1 Out -> IO out?
+            self.rule = 1
+            self.target = random.choice(range(0, self.configs.input_size))
+            mean = self.configs.weight_mean
+            std = self.configs.weight_std
+            self.weight = np.random.normal(mean, std)
+
+    def compile(self):
+        self.reset()
+        if (self.rule == 1):
+            self.inList.append([self.ID, self.target, self.weight])
