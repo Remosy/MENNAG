@@ -1,6 +1,8 @@
 import random
 import numpy as np
 import configs
+import activations
+from nn.feedforward import FeedForward
 
 
 class Root():
@@ -20,18 +22,35 @@ class Root():
                 'perturb_std': 0.2,
             }
         self.configs = configs.Configs(dict)
+        self.nn = FeedForward(self.configs)
+        if (self.configs.feedforward):
+            self.nn = FeedForward(self.configs)
 
     def generate(self):
         self.child = Div(self)
         self.child.generate()
 
-    def parse(self):
-        self.child.parse()
+    def compile(self):
+        self.child.compile()
         self.neuronSet = self.child.neuronSet
         self.connSet = self.child.connSet
         self.inSet = self.child.inSet
         self.outSet = self.child.outSet
-
+        for neuron in self.neuronSet:
+            self.nn.add_node(neuron, activations.sigmoid)
+        for conn in self.connSet:
+            source = conn[0]
+            target = conn[1]
+            while (source not in self.neuronSet):
+                source = source[:len(source) - 1]
+            while (target not in self.neuronSet):
+                target = target[:len(target) - 1]
+            self.nn.add_conn(source, target, conn[2])
+        for inConn in self.inSet:
+            self.nn.add_conn('i' + str(inConn[0]), inConn[1], inConn[2])
+        for outConn in self.outSet:
+            self.nn.add_conn(outConn[0], 'o' + str(outConn[1]), outConn[2])
+        return self.nn
 
 
 class TreeNode():
@@ -60,11 +79,11 @@ class TreeNode():
                 c.generate()
         return
 
-    def parse(self):
+    def compile(self):
         self.reset()
         for c in self.child:
             if (c is not None):
-                c.parse()
+                c.compile()
         self.merge_from_children()
         return
 
@@ -103,7 +122,7 @@ class Div(TreeNode):
 
     def generate(self):
         number = random.random()
-        if (number < 0.5):
+        if (number < 0.01):
             if (random.random() < 0.5):
                 # Rule #2 DIV -> DIV CLONES CONNS
                 self.child[0] = Div(self)
@@ -120,7 +139,7 @@ class Div(TreeNode):
                 self.child[0].ID += '0'
                 self.child[2] = Conns(self)
                 self.rule = 3
-        elif (number < 1 / (self.depth**2)):
+        elif (number < 1 / (self.depth**1.2)):
             # Rule #0 DIV -> DIV DIV CONNS
             self.child[0] = Div(self)
             self.child[0].ID += '0'
@@ -138,16 +157,16 @@ class Div(TreeNode):
             self.rule = 1
         super().generate()
 
-    def parse(self):
+    def compile(self):
         self.reset()
         if (self.rule == 3):
-            self.child[1].parse()
-            self.child[0].parse()
-            self.child[2].parse()
+            self.child[1].compile()
+            self.child[0].compile()
+            self.child[2].compile()
         else:
-            self.child[0].parse()
-            self.child[1].parse()
-            self.child[2].parse()
+            self.child[0].compile()
+            self.child[1].compile()
+            self.child[2].compile()
         self.merge_from_children()
 
     def update_depth(self):
@@ -180,13 +199,13 @@ class Clones(TreeNode):
             self.rule = 1
         super().generate()
 
-    def parse(self):
+    def compile(self):
         self.reset()
         if (self.rule == 0):
-            self.child[0].parse()
-            self.child[1].parse()
+            self.child[0].compile()
+            self.child[1].compile()
         else:
-            self.child[0].parse()
+            self.child[0].compile()
         self.merge_from_children()
 
     def update_depth(self):
@@ -207,7 +226,7 @@ class Clone(TreeNode):
         self.permi = np.random.rand(self.configs.input_size)
         self.permo = np.random.rand(self.configs.output_size)
 
-    def parse(self):
+    def compile(self):
         self.reset()
         sibDepth = self.sibling.depth
         argPermi = np.argsort(self.permi)
@@ -272,7 +291,7 @@ class Conn(TreeNode):
         std = self.configs.weight_std
         self.weight = np.random.normal(mean, std)
 
-    def parse(self):
+    def compile(self):
         self.reset()
         d = self.max_depth_from_current()
         source = self.sourceBase + self.sourceTail
@@ -298,11 +317,11 @@ class Cell(TreeNode):
         self.child[1] = Out(self)
         super().generate()
 
-    def parse(self):
+    def compile(self):
         self.reset()
         self.neuronSet.add(self.ID)
-        self.child[0].parse()
-        self.child[1].parse()
+        self.child[0].compile()
+        self.child[1].compile()
         self.merge_from_children()
 
 
@@ -323,7 +342,7 @@ class In(TreeNode):
             std = self.configs.weight_std
             self.weight = np.random.normal(mean, std)
 
-    def parse(self):
+    def compile(self):
         self.reset()
         if (self.rule == 1):
             self.inSet.add((self.source, self.ID, self.weight))
@@ -346,7 +365,7 @@ class Out(TreeNode):
             std = self.configs.weight_std
             self.weight = np.random.normal(mean, std)
 
-    def parse(self):
+    def compile(self):
         self.reset()
         if (self.rule == 1):
             self.outSet.add((self.ID, self.target, self.weight))

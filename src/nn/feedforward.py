@@ -5,7 +5,9 @@ from activations import get_act
 
 class FeedForward():
 
-    def __init__(self, input_size, output_size):
+    def __init__(self, configs):
+        input_size = configs.input_size
+        output_size = configs.output_size
         self.compiled = False
         self.nodeCount = input_size + output_size
         self.nodeNames = []
@@ -17,6 +19,7 @@ class FeedForward():
         self.output_size = output_size
         self.values = []
         self.acts = []
+        self.rawConnList = []
         for i in range(self.input_size):
             self.acts.append(get_act(0))
         for i in range(self.output_size):
@@ -38,6 +41,7 @@ class FeedForward():
         else:
             targetId = self.nodeLookup[target]
         self.connList.add_conn(sourceId, targetId, weight)
+        self.rawConnList.append((source, target, weight))
 
     def topological_sort(self, node, nodeLabels, queue):
         if (nodeLabels[node] != 0):
