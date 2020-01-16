@@ -1,6 +1,7 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import pdb
+import nodes
 
 
 def node_display_name(node):
@@ -10,12 +11,13 @@ def node_display_name(node):
 def visit_tree(pointer, vertices, edges):
     vertices.append(node_display_name(pointer))
     for i in range(2):
-        if (pointer.child[i] is not None):
-            edges.append((
-                node_display_name(pointer),
-                node_display_name(pointer.child[i]))
-            )
-            visit_tree(pointer.child[i], vertices, edges)
+        if (not isinstance(pointer, nodes.Cell)):
+            if (pointer.child[i] is not None):
+                edges.append((
+                    node_display_name(pointer),
+                    node_display_name(pointer.child[i]))
+                )
+                visit_tree(pointer.child[i], vertices, edges)
 
 
 class IndividualVisualizer():

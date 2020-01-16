@@ -3,6 +3,15 @@ import numpy as np
 import configs
 import activations
 from nn.feedforward import FeedForward
+import pdb
+
+
+def get_all_nodes_with_rule(pointer, type, rule, nodeList):
+    if ((isinstance(pointer, type)) and (pointer.rule == rule)):
+        nodeList.append(pointer)
+    for c in pointer.child:
+        if (c is not None):
+            get_all_nodes_with_rule(c, type, rule, nodeList)
 
 
 class Root():
@@ -12,7 +21,7 @@ class Root():
         self.depth = 0
         if (dict is None):
             dict = {
-                'max_depth': 10,
+                'max_depth': 2,
                 'input_size': 4,
                 'output_size': 2,
                 'feedforward': True,
@@ -22,15 +31,16 @@ class Root():
                 'perturb_std': 0.2,
             }
         self.configs = configs.Configs(dict)
-        self.nn = FeedForward(self.configs)
         if (self.configs.feedforward):
             self.nn = FeedForward(self.configs)
 
     def generate(self):
         self.child = Div(self)
+        self.child.ID = ''
         self.child.generate()
 
     def compile(self):
+        self.nn = FeedForward(self.configs)
         self.child.compile()
         self.neuronSet = self.child.neuronSet
         self.connSet = self.child.connSet
@@ -41,23 +51,49 @@ class Root():
         for conn in self.connSet:
             source = conn[0]
             target = conn[1]
-            while (source not in self.neuronSet):
+            while (source not in self.neuronSet and source != ''):
                 source = source[:len(source) - 1]
-            while (target not in self.neuronSet):
+            while (target not in self.neuronSet and target != ''):
                 target = target[:len(target) - 1]
-            self.nn.add_conn(source, target, conn[2])
+            if (not(source == '' or target == '')):
+                self.nn.add_conn(source, target, conn[2])
         for inConn in self.inSet:
             self.nn.add_conn('i' + str(inConn[0]), inConn[1], inConn[2])
         for outConn in self.outSet:
             self.nn.add_conn(outConn[0], 'o' + str(outConn[1]), outConn[2])
         return self.nn
 
+    def insert_div(self):
+        candidates = []
+        while(len(candidates) < 1):
+            pointer = self.child
+            selectRule = random.choice([0, 1, 2])
+            get_all_nodes_with_rule(pointer, Div, selectRule, candidates)
+        insertAt = random.choice(candidates)
+        insertPos = 0
+        if (selectRule == 2):
+            insertPos = 1
+        elif (selectRule == 0):
+            insertPos = random.choice([0, 1])
+        n1 = insertAt.child[insertPos]
+        if (isinstance(n1, Cell)):
+            pdb.set_trace()
+        n2 = Div(insertAt)
+        n2.rule = 0
+        n2.child[0] = n1
+        n1.parent = n2
+        n2.child[1] = Div(n2)
+        n2.child[1].generate()
+        n2.child[2] = Conns(n2)
+        insertAt.child[insertPos] = n2
+        #if (not(isinstance(n2.child[0], Div) and isinstance(n2.child[1], Div))):
+        #    pdb.set_trace()
+
 
 class TreeNode():
 
     def __init__(self, parent):
         self.parent = parent
-        self.ID = parent.ID
         self.depth = parent.depth
         self.configs = parent.configs
         self.child = [None, None, None]
@@ -96,14 +132,14 @@ class TreeNode():
 
     def max_depth_from_current(self):
         if (self.child[0] is not None):
-            left_depth = self.child[0].max_depth_from_current()
+            leftDepth = self.child[0].max_depth_from_current()
         else:
-            left_depth = self.depth
+            leftDepth = self.depth
         if (self.child[1] is not None):
-            right_depth = self.child[1].max_depth_from_current()
+            rightDepth = self.child[1].max_depth_from_current()
         else:
-            right_depth = self.depth
-        return max(left_depth, right_depth)
+            rightDepth = self.depth
+        return max(leftDepth, rightDepth)
 
     def merge_from_children(self):
         for c in self.child:
@@ -121,44 +157,53 @@ class Div(TreeNode):
         self.depth += 1
 
     def generate(self):
-        number = random.random()
-        if (number < 0.01):
-            if (random.random() < 0.5):
-                # Rule #2 DIV -> DIV CLONES CONNS
-                self.child[0] = Div(self)
-                self.child[0].ID += '0'
-                self.child[1] = Clones(self, self.child[0])
-                self.child[1].ID += '1'
-                self.child[2] = Conns(self)
-                self.rule = 2
-            else:
-                # Rule #3 DIV -> CLONES DIV CONNS
-                self.child[1] = Div(self)
-                self.child[1].ID += '1'
-                self.child[0] = Clones(self, self.child[1])
-                self.child[0].ID += '0'
-                self.child[2] = Conns(self)
-                self.rule = 3
-        elif (number < 1 / (self.depth**1.2)):
-            # Rule #0 DIV -> DIV DIV CONNS
-            self.child[0] = Div(self)
-            self.child[0].ID += '0'
-            self.child[1] = Div(self)
-            self.child[1].ID += '1'
-            self.child[2] = Conns(self)
-            self.rule = 0
+        if (self.depth >= self.configs.max_depth):
+            # Rule #3 DIV -> CELL CELL
+            self.rule = 3
         else:
-            # Rule #1 DIV -> CELL CELL CONNS
-            self.child[0] = Cell(self)
-            self.child[0].ID += '0'
-            self.child[1] = Cell(self)
-            self.child[1].ID += '1'
-            self.child[2] = Conns(self)
-            self.rule = 1
+            number = random.random()
+            if (number < 0.2):
+                if (random.random() < 0.5):
+                    # Rule #1 DIV -> DIV CLONES CONNS
+                    self.rule = 1
+                else:
+                    # Rule #2 DIV -> CLONES DIV CONNS
+                    self.rule = 2
+            elif (number < 1 / (self.depth**0.5)):
+                # Rule #0 DIV -> DIV DIV CONNS
+                self.rule = 0
+            else:
+                # Rule #3 DIV -> CELL CELL
+                self.rule = 3
+        self.generate_by_rule()
         super().generate()
+
+    def generate_by_rule(self):
+        if (self.rule == 0):
+            self.child[0] = Div(self)
+            self.child[1] = Div(self)
+            self.child[2] = Conns(self)
+        elif (self.rule == 1):
+            self.child[0] = Div(self)
+            self.child[1] = Clones(self)
+            self.child[2] = Conns(self)
+        elif (self.rule == 2):
+            self.child[1] = Div(self)
+            self.child[0] = Clones(self)
+            self.child[2] = Conns(self)
+        elif (self.rule == 3):
+            self.generate_cells()
+
+    def generate_cells(self):
+        # Rule #3 DIV -> CELL CELL CONNS
+        self.child[0] = Cell(self)
+        self.child[1] = Cell(self)
+        self.child[2] = Conns(self)
 
     def compile(self):
         self.reset()
+        self.child[0].ID = self.ID + '0'
+        self.child[1].ID = self.ID + '1'
         if (self.rule == 3):
             self.child[1].compile()
             self.child[0].compile()
@@ -179,32 +224,39 @@ class Div(TreeNode):
 
 class Clones(TreeNode):
 
-    def __init__(self, parent, sibling):
+    def __init__(self, parent):
         super().__init__(parent)
-        self.sibling = sibling
+        if (isinstance(parent, Div)):
+            if (parent.rule == 1):
+                self.sibling = parent.child[0]
+            else:
+                self.sibling = parent.child[1]
+        else:
+            self.sibling = parent
         self.depth += 1
 
     def generate(self):
         number = random.random()
         if (number < 0.01):
             # rule #0 CLONES -> CLONES CLONE
-            self.child[0] = Clone(self, self.sibling)
-            self.child[0].ID += '0'
-            self.child[1] = Clones(self, self.sibling)
-            self.child[1].ID += '1'
+            self.child[0] = Clone(self)
+            self.child[1] = Clones(self)
             self.rule = 0
         else:
             # rule #1 CLONES -> CLONE
-            self.child[0] = Clone(self, self.sibling)
+            self.child[0] = Clone(self)
             self.rule = 1
         super().generate()
 
     def compile(self):
         self.reset()
         if (self.rule == 0):
+            self.child[0].ID = self.ID + '0'
+            self.child[1].ID = self.ID + '1'
             self.child[0].compile()
             self.child[1].compile()
         else:
+            self.child[0].ID = self.ID
             self.child[0].compile()
         self.merge_from_children()
 
@@ -218,9 +270,9 @@ class Clones(TreeNode):
 
 class Clone(TreeNode):
 
-    def __init__(self, parent, sibling):
+    def __init__(self, parent):
         super().__init__(parent)
-        self.sibling = sibling
+        self.sibling = parent.sibling
 
     def generate(self):
         self.permi = np.random.rand(self.configs.input_size)
@@ -264,6 +316,10 @@ class Conns(TreeNode):
             self.child[0] = Conn(self)
         super().generate()
 
+    def compile(self):
+        self.ID = self.parent.ID
+        super().compile()
+
 
 class Conn(TreeNode):
 
@@ -276,16 +332,16 @@ class Conn(TreeNode):
         self.targetTail = bin(random.getrandbits(max_depth))[2:]
         if (self.configs.feedforward):
             # feedforward connection
-            self.sourceBase = self.ID + '0'
-            self.targetBase = self.ID + '1'
+            self.sourceAddon = '0'
+            self.targetAddon = '1'
         else:
             number = random.random()
             if (number < self.configs.forward_prob):
-                self.sourceBase = self.ID + '0'
-                self.targetBase = self.ID + '1'
+                self.sourceAddon = '0'
+                self.targetAddon = '1'
             else:
-                self.sourceBase = self.ID
-                self.targetBase = self.ID
+                self.sourceAddon = ''
+                self.targetAddon = ''
 
         mean = self.configs.weight_mean
         std = self.configs.weight_std
@@ -293,10 +349,11 @@ class Conn(TreeNode):
 
     def compile(self):
         self.reset()
+        self.ID = self.parent.ID
         d = self.max_depth_from_current()
-        source = self.sourceBase + self.sourceTail
+        source = self.ID + self.sourceAddon + self.sourceTail
         source = source[:d]
-        target = self.targetBase + self.targetTail
+        target = self.ID + self.targetAddon + self.targetTail
         target = target[:d]
         self.connSet.add((source, target, self.weight))
 
@@ -320,6 +377,8 @@ class Cell(TreeNode):
     def compile(self):
         self.reset()
         self.neuronSet.add(self.ID)
+        self.child[0].ID = self.ID
+        self.child[1].ID = self.ID
         self.child[0].compile()
         self.child[1].compile()
         self.merge_from_children()

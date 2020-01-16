@@ -30,7 +30,7 @@ class ConnList():
 
     def get_all_conn_indices_source(self, node):
         left = np.searchsorted(self.connSource, node)
-        if (left == self.connCount):
+        if (left == self.connCount or left < 0):
             return None
         if (self.connSource[left] != node):
             return None
@@ -46,7 +46,7 @@ class ConnList():
 
     def get_all_conn_indices_target(self, node):
         left = np.searchsorted(self.connTarget, node)
-        if (left == self.connCount):
+        if (left == self.connCount or left < 0):
             return None
         if (self.connTarget[left] != node):
             return None
