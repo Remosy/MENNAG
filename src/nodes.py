@@ -63,7 +63,7 @@ class Root():
             self.nn.add_conn(outConn[0], 'o' + str(outConn[1]), outConn[2])
         return self.nn
 
-    def insert_div(self):
+    def insert_at_div(self, type):
         candidates = []
         while(len(candidates) < 1):
             pointer = self.child
@@ -76,18 +76,17 @@ class Root():
         elif (selectRule == 0):
             insertPos = random.choice([0, 1])
         n1 = insertAt.child[insertPos]
-        if (isinstance(n1, Cell)):
-            pdb.set_trace()
         n2 = Div(insertAt)
-        n2.rule = 0
+        if (type == Div):
+            n2.rule = 0
+        else:
+            n2.rule = 1
         n2.child[0] = n1
         n1.parent = n2
-        n2.child[1] = Div(n2)
+        n2.child[1] = type(n2)
         n2.child[1].generate()
         n2.child[2] = Conns(n2)
         insertAt.child[insertPos] = n2
-        #if (not(isinstance(n2.child[0], Div) and isinstance(n2.child[1], Div))):
-        #    pdb.set_trace()
 
 
 class TreeNode():
@@ -148,6 +147,13 @@ class TreeNode():
                 self.connSet.update(c.connSet)
                 self.outSet.update(c.outSet)
                 self.inSet.update(c.inSet)
+
+    def deepcopy(self, newParent):
+        copy = self.__class__(newParent)
+        copy.rule = self.rule
+        for i in range(3):
+            if (self.child[i] is not None):
+                copy.child[i] = self.child[i].deepcopy(copy)
 
 
 class Div(TreeNode):
@@ -226,13 +232,6 @@ class Clones(TreeNode):
 
     def __init__(self, parent):
         super().__init__(parent)
-        if (isinstance(parent, Div)):
-            if (parent.rule == 1):
-                self.sibling = parent.child[0]
-            else:
-                self.sibling = parent.child[1]
-        else:
-            self.sibling = parent
         self.depth += 1
 
     def generate(self):
@@ -250,6 +249,13 @@ class Clones(TreeNode):
 
     def compile(self):
         self.reset()
+        if (isinstance(self.parent, Div)):
+            if (self.parent.rule == 1):
+                self.sibling = self.parent.child[0]
+            else:
+                self.sibling = self.parent.child[1]
+        else:
+            self.sibling = self.parent
         if (self.rule == 0):
             self.child[0].ID = self.ID + '0'
             self.child[1].ID = self.ID + '1'
@@ -272,7 +278,6 @@ class Clone(TreeNode):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.sibling = parent.sibling
 
     def generate(self):
         self.permi = np.random.rand(self.configs.input_size)
@@ -280,6 +285,7 @@ class Clone(TreeNode):
 
     def compile(self):
         self.reset()
+        self.sibling = self.parent.sibling
         sibDepth = self.sibling.depth
         argPermi = np.argsort(self.permi)
         argPermo = np.argsort(self.permo)
@@ -298,6 +304,11 @@ class Clone(TreeNode):
             sourceCopy = self.ID + outConn[0][sibDepth:]
             targetCopy = argPermo[outConn[1]]
             self.outSet.add((sourceCopy, targetCopy, outConn[2]))
+
+    def deepcopy(self, newParent):
+        copy = Clone(newParent)
+        copy.permi = self.permi.copy()
+        copy.permo = self.permo.copy()
 
 
 class Conns(TreeNode):
@@ -363,6 +374,13 @@ class Conn(TreeNode):
             p = p.parent
         return p.max_depth_from_current()
 
+    def deepcopy(self, newParent):
+        copy = Conn(newParent)
+        copy.sourceAddon = self.sourceAddon
+        copy.targetAddon = self.sourceAddon
+        copy.sourceTail = self.sourceTail
+        copy.targetTail = self.targetTail
+
 
 class Cell(TreeNode):
 
@@ -406,6 +424,13 @@ class In(TreeNode):
         if (self.rule == 1):
             self.inSet.add((self.source, self.ID, self.weight))
 
+    def deepcopy(self, newParent):
+        copy = In(newParent)
+        copy.rule = self.rule
+        if (self.rule == 1):
+            copy.source = self.source
+            copy.weight = self.weight
+
 
 class Out(TreeNode):
     def __init__(self, parent):
@@ -428,3 +453,10 @@ class Out(TreeNode):
         self.reset()
         if (self.rule == 1):
             self.outSet.add((self.ID, self.target, self.weight))
+
+    def deepcopy(self, newParent):
+        copy = Out(newParent)
+        copy.rule = self.rule
+        if (self.rule == 1):
+            copy.target = self.target
+            copy.weight = self.weight
