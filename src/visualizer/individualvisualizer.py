@@ -53,4 +53,6 @@ class IndividualVisualizer():
             args='-Gnodesep=10')
         plt.figure(1, figsize=(20, 20))
         nx.draw(nnGraph, layout, with_labels=True, node_size=1000)
+        labels = nx.get_edge_attributes(nnGraph, 'weight')
+        nx.draw_networkx_edge_labels(nnGraph, layout, edge_labels=labels)
         plt.savefig('test.png')

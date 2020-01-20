@@ -14,6 +14,14 @@ def get_all_nodes_with_rule(pointer, type, rule, nodeList):
             get_all_nodes_with_rule(c, type, rule, nodeList)
 
 
+def get_all_nodes(pointer, type, nodeList):
+    if (isinstance(pointer, type)):
+        nodeList.append(pointer)
+    for c in pointer.child:
+        if (c is not None):
+            get_all_nodes(c, type, nodeList)
+
+
 class Root():
 
     def __init__(self, dict=None):
@@ -21,7 +29,7 @@ class Root():
         self.depth = 0
         if (dict is None):
             dict = {
-                'max_depth': 2,
+                'max_depth': 5,
                 'input_size': 4,
                 'output_size': 2,
                 'feedforward': True,
@@ -63,6 +71,14 @@ class Root():
             self.nn.add_conn(outConn[0], 'o' + str(outConn[1]), outConn[2])
         return self.nn
 
+    def get_div(self, ID):
+        pointer = self.child
+        for i in range(len(ID)):
+            pointer = pointer.child[int(ID[i])]
+            if (pointer is None):
+                return None
+        return pointer
+
     def insert_at_div(self, type):
         candidates = []
         while(len(candidates) < 1):
@@ -79,14 +95,49 @@ class Root():
         n2 = Div(insertAt)
         if (type == Div):
             n2.rule = 0
+            newPos = random.choice([0, 1])
+            oldPos = 1 - newPos
         else:
-            n2.rule = 1
-        n2.child[0] = n1
+            n2.rule = random.choice([1, 2])
+            if (n2.rule == 1):
+                newPos = 1
+                oldPos = 0
+            else:
+                newPos = 0
+                oldPos = 1
+        n2.child[oldPos] = n1
         n1.parent = n2
-        n2.child[1] = type(n2)
-        n2.child[1].generate()
+        n2.child[newPos] = type(n2)
+        n2.child[newPos].generate()
         n2.child[2] = Conns(n2)
         insertAt.child[insertPos] = n2
+
+    def insert_at_list(self, listType):
+        if (listType == Clones):
+            type = Clone
+        elif (listType == Conns):
+            type = Conn
+        candidates = []
+        pointer = self.child
+        get_all_nodes(pointer, listType, candidates)
+        insertAt = random.choice(candidates)
+        listNode = listType(insertAt.parent)
+        if (insertAt.parent.child[0] == insertAt):
+            insertAt.parent.child[0] = listNode
+        else:
+            insertAt.parent.child[1] = listNode
+        insertAt.parent = listNode
+        listNode.child[1] = insertAt
+        listNode.child[0] = type(listNode)
+        listNode.child[0].generate()
+        listNode.rule = 0
+
+    def cross_at(self, Div1, Div2):
+        Div2 = Div2.deepcopy(Div1.parent)
+        if (Div1.parent.child[0] == Div1):
+            Div1.parent.child[0] = Div2
+        else:
+            Div1.parent.child[1] = Div2
 
 
 class TreeNode():
@@ -154,6 +205,7 @@ class TreeNode():
         for i in range(3):
             if (self.child[i] is not None):
                 copy.child[i] = self.child[i].deepcopy(copy)
+        return copy
 
 
 class Div(TreeNode):
@@ -309,6 +361,7 @@ class Clone(TreeNode):
         copy = Clone(newParent)
         copy.permi = self.permi.copy()
         copy.permo = self.permo.copy()
+        return copy
 
 
 class Conns(TreeNode):
@@ -380,6 +433,8 @@ class Conn(TreeNode):
         copy.targetAddon = self.sourceAddon
         copy.sourceTail = self.sourceTail
         copy.targetTail = self.targetTail
+        copy.weight = self.weight
+        return copy
 
 
 class Cell(TreeNode):
@@ -430,6 +485,7 @@ class In(TreeNode):
         if (self.rule == 1):
             copy.source = self.source
             copy.weight = self.weight
+        return copy
 
 
 class Out(TreeNode):
@@ -460,3 +516,4 @@ class Out(TreeNode):
         if (self.rule == 1):
             copy.target = self.target
             copy.weight = self.weight
+        return copy
