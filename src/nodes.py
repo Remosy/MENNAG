@@ -37,23 +37,30 @@ class Root():
                 'weight_mean': 0,
                 'weight_std': 1,
                 'perturb_std': 0.2,
+                'cross_rate': 0.3,
+                'weight_perturb_rate': 0.3,
+                'weight_reset_rate': 0.05,
+                'insertion_rate': 0.2,
+                'deletion_rate': 0.1,
+                'random_tree_rate': 0.05
             }
         self.configs = configs.Configs(dict)
         if (self.configs.feedforward):
             self.nn = FeedForward(self.configs)
 
     def generate(self):
-        self.child = Div(self)
-        self.child.ID = ''
-        self.child.generate()
+        self.child = [Div(self), None, None]
+        self.child[0].generate()
 
     def compile(self):
         self.nn = FeedForward(self.configs)
-        self.child.compile()
-        self.neuronSet = self.child.neuronSet
-        self.connSet = self.child.connSet
-        self.inSet = self.child.inSet
-        self.outSet = self.child.outSet
+        self.child[0].ID = ''
+        self.child[0].compile()
+        self.neuronSet = self.child[0].neuronSet
+        self.connSet = self.child[0].connSet
+        self.inSet = self.child[0].inSet
+        self.outSet = self.child[0].outSet
+        self.nodeSet = self.child[0].nodeSet
         for neuron in self.neuronSet:
             self.nn.add_node(neuron, activations.sigmoid)
         for conn in self.connSet:
@@ -72,21 +79,29 @@ class Root():
         return self.nn
 
     def get_div(self, ID):
-        pointer = self.child
+        pointer = self.child[0]
         for i in range(len(ID)):
             pointer = pointer.child[int(ID[i])]
             if (pointer is None):
                 return None
         return pointer
 
+    def get_all_nodes(self, type=None, rule=None):
+        candidates = []
+        for n in self.nodeSet:
+            if ((type is None) or (isinstance(n, type))):
+                if ((rule is None) or (n.rule == rule)):
+                    candidates.append(n)
+        return candidates
+
     def insert_at_div(self, type):
         candidates = []
         while(len(candidates) < 1):
-            pointer = self.child
             selectRule = random.choice([0, 1, 2])
-            get_all_nodes_with_rule(pointer, Div, selectRule, candidates)
+            candidates = self.get_all_nodes_with_rule(type=Div, rule=selectRule)
         insertAt = random.choice(candidates)
-        insertPos = 0
+        if (selectRule == 1):
+            insertPos = 0
         if (selectRule == 2):
             insertPos = 1
         elif (selectRule == 0):
@@ -112,14 +127,38 @@ class Root():
         n2.child[2] = Conns(n2)
         insertAt.child[insertPos] = n2
 
+    def delete_at_div(self, type):
+        candidates = []
+        if (type == Div):
+            selectRule = 0
+        else:
+            selectRule = random.choice([1, 2])
+        candidates = self.get_all_nodes(type=Div, rule=selectRule)
+        if (len(candidates) == 0):
+            return
+        selected = random.choice(candidates)
+        selectedPos = 0
+        for i in range(3):
+            if (selected.parent.child[i] == selected):
+                selectedPos = i
+        if (selectRule == 0):
+            deletePos = random.choice([0, 1])
+        elif (selectRule == 1):
+            deletePos = 1
+        elif (selectRule == 2):
+            deletePos = 0
+        siblingPos = 1 - deletePos
+        deleted = selected.child[deletePos]
+        sibling = selected.child[siblingPos]
+        sibling.parent = selected.parent
+        sibling.parent.child[selectedPos] = sibling
+
     def insert_at_list(self, listType):
         if (listType == Clones):
             type = Clone
         elif (listType == Conns):
             type = Conn
-        candidates = []
-        pointer = self.child
-        get_all_nodes(pointer, listType, candidates)
+        candidates = self.get_all_nodes(type=listType)
         insertAt = random.choice(candidates)
         listNode = listType(insertAt.parent)
         if (insertAt.parent.child[0] == insertAt):
@@ -155,6 +194,7 @@ class TreeNode():
         self.connSet = set()
         self.inSet = set()
         self.outSet = set()
+        self.nodeSet = set([self])
 
     def mutate(self):
         return
@@ -198,6 +238,7 @@ class TreeNode():
                 self.connSet.update(c.connSet)
                 self.outSet.update(c.outSet)
                 self.inSet.update(c.inSet)
+                self.nodeSet.update(c.nodeSet)
 
     def deepcopy(self, newParent):
         copy = self.__class__(newParent)

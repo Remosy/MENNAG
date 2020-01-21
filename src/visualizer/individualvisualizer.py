@@ -26,7 +26,7 @@ class IndividualVisualizer():
         self.individual = individual
 
     def draw_tree(self):
-        pointer = self.individual.child
+        pointer = self.individual.child[0]
         vertices = []
         edges = []
         visit_tree(pointer, vertices, edges)
