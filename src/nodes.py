@@ -38,6 +38,7 @@ class Root():
                 'weight_std': 1,
                 'perturb_std': 0.2,
                 'cross_rate': 0.3,
+                'conn_relocate_rate': 0.05,
                 'weight_perturb_rate': 0.3,
                 'weight_reset_rate': 0.05,
                 'insertion_rate': 0.2,
@@ -78,7 +79,7 @@ class Root():
             self.nn.add_conn(outConn[0], 'o' + str(outConn[1]), outConn[2])
         return self.nn
 
-    def get_div(self, ID):
+    def get_node(self, ID):
         pointer = self.child[0]
         for i in range(len(ID)):
             pointer = pointer.child[int(ID[i])]
@@ -135,7 +136,7 @@ class Root():
             selectRule = random.choice([1, 2])
         candidates = self.get_all_nodes(type=Div, rule=selectRule)
         if (len(candidates) == 0):
-            return
+            return 0
         selected = random.choice(candidates)
         selectedPos = 0
         for i in range(3):
@@ -152,24 +153,35 @@ class Root():
         sibling = selected.child[siblingPos]
         sibling.parent = selected.parent
         sibling.parent.child[selectedPos] = sibling
+        return 1
 
-    def insert_at_list(self, listType):
-        if (listType == Clones):
-            type = Clone
-        elif (listType == Conns):
-            type = Conn
+    def insert_at_list(self, type):
+        if (type == Clone):
+            listType = Clones
+        elif (type == Conn):
+            listType = Conns
         candidates = self.get_all_nodes(type=listType)
         insertAt = random.choice(candidates)
         listNode = listType(insertAt.parent)
-        if (insertAt.parent.child[0] == insertAt):
-            insertAt.parent.child[0] = listNode
-        else:
-            insertAt.parent.child[1] = listNode
+        insertAt.parent.child[insertAt.get_pos()] = listNode
         insertAt.parent = listNode
         listNode.child[1] = insertAt
         listNode.child[0] = type(listNode)
         listNode.child[0].generate()
         listNode.rule = 0
+
+    def delete_at_list(self, type):
+        if (type == Clone):
+            listType = Clones
+        elif (type == Conn):
+            listType = Conns
+        candidates = self.get_all_nodes(type=listType, rule=0)
+        if (len(candidates) == 0):
+            return 0
+        deleted = random.choice(candidates)
+        deleted.parent.child[deleted.get_pos()] = deleted.child[1]
+        deleted.child[1].parent = deleted.parent
+        return 1
 
     def cross_at(self, Div1, Div2):
         Div2 = Div2.deepcopy(Div1.parent)
@@ -197,6 +209,9 @@ class TreeNode():
         self.nodeSet = set([self])
 
     def mutate(self):
+        for c in self.child:
+            if (c is not None):
+                c.mutate()
         return
 
     def generate(self):
@@ -239,6 +254,11 @@ class TreeNode():
                 self.outSet.update(c.outSet)
                 self.inSet.update(c.inSet)
                 self.nodeSet.update(c.nodeSet)
+
+    def get_pos(self):
+        for i in range(3):
+            if (self.parent.child[i] == self):
+                return i
 
     def deepcopy(self, newParent):
         copy = self.__class__(newParent)
@@ -348,7 +368,7 @@ class Clones(TreeNode):
             else:
                 self.sibling = self.parent.child[1]
         else:
-            self.sibling = self.parent
+            self.sibling = self.parent.sibling
         if (self.rule == 0):
             self.child[0].ID = self.ID + '0'
             self.child[1].ID = self.ID + '1'
@@ -398,6 +418,12 @@ class Clone(TreeNode):
             targetCopy = argPermo[outConn[1]]
             self.outSet.add((sourceCopy, targetCopy, outConn[2]))
 
+    def mutate(self):
+        pos = random.choice(range(len(self.permi)))
+        self.permi[pos] = np.random.rand()
+        pos = random.choice(range(len(self.permo)))
+        self.permo[pos] = np.random.rand()
+
     def deepcopy(self, newParent):
         copy = Clone(newParent)
         copy.permi = self.permi.copy()
@@ -413,12 +439,13 @@ class Conns(TreeNode):
     def generate(self):
         number = random.random()
         if (number < 0.5):
-            # CONNS -> CONN CONNS
+            # Rule 0 CONNS -> CONN CONNS
             self.child[0] = Conn(self)
             self.child[1] = Conns(self)
+            self.rule = 0
         else:
-            # CONNS -> CONN
-            self.child[0] = Conn(self)
+            # Rule 1 CONNS -> CONN
+            self.rule = 1
         super().generate()
 
     def compile(self):
@@ -467,6 +494,15 @@ class Conn(TreeNode):
         while(isinstance(p, Conns)):
             p = p.parent
         return p.max_depth_from_current()
+
+    def mutate(self):
+        number = random.random()
+        reset_threshold = self.configs.weight_reset_rate
+        perturb_threshold = reset_threshold + self.configs.weight_perturb_rate
+        if (number < reset_threshold):
+            self.generate()
+        elif (number < perturb_threshold):
+            self.weight += np.random.normal(0, self.configs.perturb_std)
 
     def deepcopy(self, newParent):
         copy = Conn(newParent)
@@ -520,6 +556,16 @@ class In(TreeNode):
         if (self.rule == 1):
             self.inSet.add((self.source, self.ID, self.weight))
 
+    def mutate(self):
+        number = random.random()
+        reset_threshold = self.configs.weight_reset_rate
+        perturb_threshold = reset_threshold + self.configs.weight_perturb_rate
+        if (number < reset_threshold):
+            self.generate()
+        elif (number < perturb_threshold):
+            if (self.rule == 1):
+                self.weight += np.random.normal(0, self.configs.perturb_std)
+
     def deepcopy(self, newParent):
         copy = In(newParent)
         copy.rule = self.rule
@@ -550,6 +596,16 @@ class Out(TreeNode):
         self.reset()
         if (self.rule == 1):
             self.outSet.add((self.ID, self.target, self.weight))
+
+    def mutate(self):
+        number = random.random()
+        reset_threshold = self.configs.weight_reset_rate
+        perturb_threshold = reset_threshold + self.configs.weight_perturb_rate
+        if (number < reset_threshold):
+            self.generate()
+        elif (number < perturb_threshold):
+            if (self.rule == 1):
+                self.weight += np.random.normal(0, self.configs.perturb_std)
 
     def deepcopy(self, newParent):
         copy = Out(newParent)
