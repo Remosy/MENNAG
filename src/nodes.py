@@ -24,11 +24,12 @@ def get_all_nodes(pointer, type, nodeList):
 
 class Root():
 
-    def __init__(self, dict=None):
+    def __init__(self, config=None):
         self.ID = ''
         self.depth = 0
-        if (dict is None):
+        if (config is None):
             dict = {
+                "pop_size": 1000,
                 'max_depth': 10,
                 'input_size': 4,
                 'output_size': 2,
@@ -45,7 +46,7 @@ class Root():
                 'deletion_rate': 0.1,
                 'random_tree_rate': 0.05
             }
-        self.configs = configs.Configs(dict)
+            self.configs = configs.Configs(dict)
         if (self.configs.feedforward):
             self.nn = FeedForward(self.configs)
 
