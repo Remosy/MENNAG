@@ -46,16 +46,15 @@ class Root():
                 'deletion_rate': 0.1,
                 'random_tree_rate': 0.05
             }
-            self.configs = configs.Configs(dict)
-        if (self.configs.feedforward):
-            self.nn = FeedForward(self.configs)
+            self.config = configs.Configs(dict)
+        if (self.config.feedforward):
+            self.nn = FeedForward(self.config)
 
     def generate(self):
         self.child = [Div(self), None, None]
         self.child[0].generate()
 
     def compile(self):
-        self.nn = FeedForward(self.configs)
         self.child[0].ID = ''
         self.child[0].compile()
         self.neuronSet = self.child[0].neuronSet
@@ -63,6 +62,9 @@ class Root():
         self.inSet = self.child[0].inSet
         self.outSet = self.child[0].outSet
         self.nodeSet = self.child[0].nodeSet
+        
+    def execute(self):
+        self.nn = FeedForward(self.config)
         for neuron in self.neuronSet:
             self.nn.add_node(neuron, activations.sigmoid)
         for conn in self.connSet:
@@ -82,8 +84,8 @@ class Root():
 
     def mutate(self):
         n0 = random.random()
-        insertionThreshold = self.configs.insertion_rate
-        deletionThreshold = insertionThreshold + self.configs.deletion_rate
+        insertionThreshold = self.config.insertion_rate
+        deletionThreshold = insertionThreshold + self.config.deletion_rate
         if (n0 < insertionThreshold):
             n1 = random.random()
             if (n1 < 0.5):
@@ -222,6 +224,7 @@ class Root():
             Div1.parent.child[0] = Div2
         else:
             Div1.parent.child[1] = Div2
+        return offspring
 
     def deepcopy(self):
         copy = Root()
@@ -235,7 +238,7 @@ class TreeNode():
     def __init__(self, parent):
         self.parent = parent
         self.depth = parent.depth
-        self.configs = parent.configs
+        self.config = parent.config
         self.child = [None, None, None]
         self.rule = -1
         self.reset()
@@ -315,7 +318,7 @@ class Div(TreeNode):
         self.depth += 1
 
     def generate(self):
-        if (self.depth >= self.configs.max_depth):
+        if (self.depth >= self.config.max_depth):
             # Rule #3 DIV -> CELL CELL
             self.rule = 3
         else:
@@ -432,8 +435,8 @@ class Clone(TreeNode):
         super().__init__(parent)
 
     def generate(self):
-        self.permi = np.random.rand(self.configs.input_size)
-        self.permo = np.random.rand(self.configs.output_size)
+        self.permi = np.random.rand(self.config.input_size)
+        self.permo = np.random.rand(self.config.output_size)
 
     def compile(self):
         self.reset()
@@ -498,24 +501,24 @@ class Conn(TreeNode):
         super().__init__(parent)
 
     def generate(self):
-        max_depth = self.configs.max_depth
+        max_depth = self.config.max_depth
         self.sourceTail = bin(random.getrandbits(max_depth))[2:]
         self.targetTail = bin(random.getrandbits(max_depth))[2:]
-        if (self.configs.feedforward):
+        if (self.config.feedforward):
             # feedforward connection
             self.sourceAddon = '0'
             self.targetAddon = '1'
         else:
             number = random.random()
-            if (number < self.configs.forward_prob):
+            if (number < self.config.forward_prob):
                 self.sourceAddon = '0'
                 self.targetAddon = '1'
             else:
                 self.sourceAddon = ''
                 self.targetAddon = ''
 
-        mean = self.configs.weight_mean
-        std = self.configs.weight_std
+        mean = self.config.weight_mean
+        std = self.config.weight_std
         self.weight = np.random.normal(mean, std)
 
     def compile(self):
@@ -536,12 +539,12 @@ class Conn(TreeNode):
 
     def mutate(self):
         number = random.random()
-        resetThreshold = self.configs.weight_reset_rate
-        perturbThreshold = resetThreshold + self.configs.weight_perturb_rate
+        resetThreshold = self.config.weight_reset_rate
+        perturbThreshold = resetThreshold + self.config.weight_perturb_rate
         if (number < resetThreshold):
             self.generate()
         elif (number < perturbThreshold):
-            self.weight += np.random.normal(0, self.configs.perturb_std)
+            self.weight += np.random.normal(0, self.config.perturb_std)
 
     def deepcopy(self, newParent):
         copy = Conn(newParent)
@@ -585,9 +588,9 @@ class In(TreeNode):
         else:
             # Rule #1 In -> IO in?
             self.rule = 1
-            self.source = random.choice(range(0, self.configs.input_size))
-            mean = self.configs.weight_mean
-            std = self.configs.weight_std
+            self.source = random.choice(range(0, self.config.input_size))
+            mean = self.config.weight_mean
+            std = self.config.weight_std
             self.weight = np.random.normal(mean, std)
 
     def compile(self):
@@ -597,13 +600,13 @@ class In(TreeNode):
 
     def mutate(self):
         number = random.random()
-        resetThreshold = self.configs.weight_reset_rate
-        perturbThreshold = resetThreshold + self.configs.weight_perturb_rate
+        resetThreshold = self.config.weight_reset_rate
+        perturbThreshold = resetThreshold + self.config.weight_perturb_rate
         if (number < resetThreshold):
             self.generate()
         elif (number < perturbThreshold):
             if (self.rule == 1):
-                self.weight += np.random.normal(0, self.configs.perturb_std)
+                self.weight += np.random.normal(0, self.config.perturb_std)
 
     def deepcopy(self, newParent):
         copy = In(newParent)
@@ -626,9 +629,9 @@ class Out(TreeNode):
         else:
             # Rule #1 Out -> IO out?
             self.rule = 1
-            self.target = random.choice(range(0, self.configs.output_size))
-            mean = self.configs.weight_mean
-            std = self.configs.weight_std
+            self.target = random.choice(range(0, self.config.output_size))
+            mean = self.config.weight_mean
+            std = self.config.weight_std
             self.weight = np.random.normal(mean, std)
 
     def compile(self):
@@ -638,13 +641,13 @@ class Out(TreeNode):
 
     def mutate(self):
         number = random.random()
-        resetThreshold = self.configs.weight_reset_rate
-        perturbThreshold = resetThreshold + self.configs.weight_perturb_rate
+        resetThreshold = self.config.weight_reset_rate
+        perturbThreshold = resetThreshold + self.config.weight_perturb_rate
         if (number < resetThreshold):
             self.generate()
         elif (number < perturbThreshold):
             if (self.rule == 1):
-                self.weight += np.random.normal(0, self.configs.perturb_std)
+                self.weight += np.random.normal(0, self.config.perturb_std)
 
     def deepcopy(self, newParent):
         copy = Out(newParent)
