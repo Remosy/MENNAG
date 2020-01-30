@@ -78,6 +78,8 @@ class FeedForward():
         sourceList = self.connList.connSource
         weightList = self.connList.connWeight
         connCount = self.connList.connCount
+        if (connCount == 0):
+            return self.values[self.input_size:self.input_size + self.output_size]
         prev = targetList[0]
         i = -1
         while (i != connCount - 1):

@@ -27,26 +27,7 @@ class Root():
     def __init__(self, config=None):
         self.ID = ''
         self.depth = 0
-        if (config is None):
-            dict = {
-                "pop_size": 1000,
-                'max_depth': 10,
-                'input_size': 4,
-                'output_size': 2,
-                'feedforward': True,
-                'forward_prob': 0.8,
-                'weight_mean': 0,
-                'weight_std': 1,
-                'perturb_std': 0.2,
-                'cross_rate': 0.3,
-                'conn_relocate_rate': 0.05,
-                'weight_perturb_rate': 0.3,
-                'weight_reset_rate': 0.05,
-                'insertion_rate': 0.2,
-                'deletion_rate': 0.1,
-                'random_tree_rate': 0.05
-            }
-            self.config = configs.Configs(dict)
+        self.config = config
         if (self.config.feedforward):
             self.nn = FeedForward(self.config)
 
@@ -62,11 +43,11 @@ class Root():
         self.inSet = self.child[0].inSet
         self.outSet = self.child[0].outSet
         self.nodeSet = self.child[0].nodeSet
-        
+
     def execute(self):
         self.nn = FeedForward(self.config)
         for neuron in self.neuronSet:
-            self.nn.add_node(neuron, activations.sigmoid)
+            self.nn.add_node(neuron, 1)
         for conn in self.connSet:
             source = conn[0]
             target = conn[1]
@@ -80,6 +61,7 @@ class Root():
             self.nn.add_conn('i' + str(inConn[0]), inConn[1], inConn[2])
         for outConn in self.outSet:
             self.nn.add_conn(outConn[0], 'o' + str(outConn[1]), outConn[2])
+        self.nn.compile()
         return self.nn
 
     def mutate(self):
@@ -123,9 +105,13 @@ class Root():
 
     def insert_at_div(self, type):
         candidates = []
-        while(len(candidates) < 1):
-            selectRule = random.choice([0, 1, 2])
+        availRules = [0, 1, 2]
+        while((len(candidates) < 1) and (len(availRules) > 1)):
+            selectRule = random.choice(availRules)
             candidates = self.get_all_nodes(type=Div, rule=selectRule)
+            availRules.remove(selectRule)
+        if (len(candidates) == 0):
+            return 0
         insertAt = random.choice(candidates)
         if (selectRule == 1):
             insertPos = 0
@@ -227,8 +213,8 @@ class Root():
         return offspring
 
     def deepcopy(self):
-        copy = Root()
-        copy.child[0] = self.child[0].deepcopy()
+        copy = Root(config=self.config)
+        copy.child = [self.child[0].deepcopy(copy), None, None]
         copy.compile()
         return copy
 

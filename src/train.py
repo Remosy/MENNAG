@@ -3,7 +3,7 @@ import sys
 import argparse
 import numpy as np
 import gym
-
+from mpi4py import MPI
 from ea import EA
 from nodes import Root
 
@@ -11,17 +11,29 @@ from nodes import Root
 def main(args):
     ea = EA()
     ea.load_config(args.config)
-    for i in range(args.generation):
+    for i in range(int(args.generation)):
         pop = ea.ask()
         if (args.num_workers == 1):
             fitnesses = eval(pop, args.task)
         ea.tell(fitnesses)
+        print(max(fitnesses))
+
 
 def eval(pop, task):
     env = gym.make(task)
     env.seed(seed=142857963)
+    fitnesses = []
     for p in pop:
-        env.reset()
+        nn = p.execute()
+        obs = env.reset()
+        done = False
+        reward = 0
+        while (not done):
+            action = nn.step(obs)
+            obs, reward, done, info = env.step(action)
+        fitnesses.append(reward)
+    env.close()
+    return fitnesses
 
 
 if __name__ == '__main__':

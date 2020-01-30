@@ -30,18 +30,22 @@ class ConnList():
 
     def get_all_conn_indices_source(self, node):
         left = np.searchsorted(self.connSource, node)
-        if (left == self.connCount or left < 0):
-            return None
-        if (self.connSource[left] != node):
-            return None
-        right = left
-        while (self.connSource[left - 1] == node):
-            left -= 1
-        while (self.connSource[right] == node):
-            if (right + 1 == self.connCount):
-                right = self.connCount
-                break
-            right += 1
+        try:
+            if (left == self.connCount or left < 0):
+                return None
+            if (self.connSource[left] != node):
+                return None
+            right = left
+            while ((self.connSource[left - 1] == node) and (left != 0)):
+                left -= 1
+            while (self.connSource[right] == node):
+                if (right + 1 == self.connCount):
+                    right = self.connCount
+                    break
+                right += 1
+        except IndexError:
+            print(self.connSource)
+
         return np.arange(left, right)
 
     def get_all_conn_indices_target(self, node):
@@ -51,7 +55,7 @@ class ConnList():
         if (self.connTarget[left] != node):
             return None
         right = left
-        while (self.connTarget[left - 1] == node):
+        while ((self.connTarget[left - 1] == node) and (left != 0)):
             left -= 1
         while (self.connTarget[right] == node):
             if (right + 1 == self.connCount):

@@ -23,8 +23,9 @@ class EA():
 
     def tell(self, fitnesses):
         self.fitnesses = fitnesses
-        keys = np.argsort(self.fitnesses).reverse()
-        self.pop = self.pop[keys]
+        keys = np.flip(np.argsort(self.fitnesses)).tolist()
+        pop = [self.pop[i] for i in keys]
+        self.pop = pop
 
     def rank(self):
         rank = np.argsort(self.fitnesses)
@@ -32,19 +33,19 @@ class EA():
 
     def reproduce(self):
         newPop = []
-        popSize = self.configs.pop_size
+        popSize = self.config.pop_size
         elitismRatio = self.config.elitism_ratio
-        p = np.array(range(self.config.pop_size)).reverse()
+        p = np.flip(np.array(range(self.config.pop_size)))
         p = (p + 1) / sum(p + 1)
-        while (len(self.newPop) < round(popSize * self.config.cross_rate)):
+        while (len(newPop) < round(popSize * self.config.cross_rate)):
             parent1 = np.random.choice(self.pop, p=p)
             parent2 = np.random.choice(self.pop, p=p)
             if (parent1 != parent2):
                 offspring = parent1.cross_with(parent2)
                 offspring.compile()
-                newPop.append()
+                newPop.append(offspring)
         newPop.extend(self.pop[:round(popSize * elitismRatio)])
-        while(len(self.newPop) < popSize):
+        while(len(newPop) < popSize):
             offspring = np.random.choice(self.pop, p=p).deepcopy()
             offspring.mutate()
             offspring.compile()
