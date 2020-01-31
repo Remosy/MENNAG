@@ -44,7 +44,8 @@ class EA():
                 offspring = parent1.cross_with(parent2)
                 offspring.compile()
                 newPop.append(offspring)
-        newPop.extend(self.pop[:round(popSize * elitismRatio)])
+        for i in range(round(popSize * elitismRatio)):
+            newPop.append(self.pop[i].deepcopy())
         while(len(newPop) < popSize):
             offspring = np.random.choice(self.pop, p=p).deepcopy()
             offspring.mutate()

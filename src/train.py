@@ -3,7 +3,7 @@ import sys
 import argparse
 import numpy as np
 import gym
-from mpi4py import MPI
+import multiprocessing as mp
 from ea import EA
 from nodes import Root
 
@@ -13,13 +13,29 @@ def main(args):
     ea.load_config(args.config)
     for i in range(int(args.generation)):
         pop = ea.ask()
-        if (args.num_workers == 1):
-            fitnesses = eval(pop, args.task)
+        fitnesses = []
+        num_workers = int(args.num_workers)
+        if (num_workers == 1):
+            fitnesses = eval((pop, args.task, 0))[0]
+        else:
+            batch_indices = np.linspace(0, len(pop), num_workers + 1).astype(int)
+            batches = []
+            for i in range(num_workers):
+                batches.append((
+                    pop[batch_indices[i]:batch_indices[i + 1]],
+                    args.task,
+                    i))
+            with mp.Pool(num_workers) as pool:
+                results = pool.map(eval, batches)
+            results.sort(key=lambda x: x[1])
+            for r in results:
+                fitnesses.extend(r[0])
         ea.tell(fitnesses)
         print(max(fitnesses))
 
 
-def eval(pop, task):
+def eval(batches):
+    pop, task, batch_num = batches
     env = gym.make(task)
     env.seed(seed=142857963)
     fitnesses = []
@@ -33,7 +49,7 @@ def eval(pop, task):
             obs, reward, done, info = env.step(action)
         fitnesses.append(reward)
     env.close()
-    return fitnesses
+    return (fitnesses, batch_num)
 
 
 if __name__ == '__main__':
