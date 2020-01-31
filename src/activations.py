@@ -1,12 +1,12 @@
 import numpy as np
-
+import math
 
 def linear(x):
     return x
-    
+
 
 def sigmoid(x):
-    return (np.tanh(x / 2.0) + 1.0) / 2.0
+    return (1 / (1 + math.exp(-x)) - 0.5) * 2
 
 
 def get_act(num):

@@ -6,7 +6,9 @@ import gym
 import multiprocessing as mp
 from ea import EA
 from nodes import Root
+import time
 
+SEED = 142857369
 
 def main(args):
     ea = EA()
@@ -32,22 +34,52 @@ def main(args):
                 fitnesses.extend(r[0])
         ea.tell(fitnesses)
         print(max(fitnesses))
+        if (max(fitnesses) > 5):
+            simulate(ea.pop[np.argmax(fitnesses)], args.task)
 
+
+def simulate(ind, task):
+    env = gym.make(task)
+    env.seed(seed=SEED)
+    nn = ind.execute()
+    obs = env.reset()
+    done = False
+    totalReward = 0
+    while (not done):
+        if (task == 'CartPole-v1'):
+            action = nn.step(obs)[0]
+            if (action > 0):
+                action = 1
+            else:
+                action = 0
+        else:
+            action = nn.step(obs) * env.action_space.high
+        obs, reward, done, info = env.step(action)
+        env.render()
+    env.close()
 
 def eval(batches):
     pop, task, batch_num = batches
     env = gym.make(task)
-    env.seed(seed=142857963)
+    env.seed(seed=SEED)
     fitnesses = []
-    for p in pop:
-        nn = p.execute()
+    for ind in pop:
+        nn = ind.execute()
         obs = env.reset()
         done = False
-        reward = 0
+        totalReward = 0
         while (not done):
-            action = nn.step(obs)
+            if (task == 'CartPole-v1'):
+                action = nn.step(obs)[0]
+                if (action > 0):
+                    action = 1
+                else:
+                    action = 0
+            else:
+                action = nn.step(obs) * env.action_space.high
             obs, reward, done, info = env.step(action)
-        fitnesses.append(reward)
+            totalReward += reward
+        fitnesses.append(totalReward)
     env.close()
     return (fitnesses, batch_num)
 
