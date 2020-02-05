@@ -11,7 +11,7 @@ import time
 SEED = 142857369
 
 def main(args):
-    ea = EA()
+    ea = EA(1)
     ea.load_config(args.config)
     for i in range(int(args.generation)):
         pop = ea.ask()
@@ -32,11 +32,11 @@ def main(args):
             results.sort(key=lambda x: x[1])
             for r in results:
                 fitnesses.extend(r[0])
-        ea.tell(fitnesses)
-        print(max(fitnesses))
-        if (max(fitnesses) > 5):
-            simulate(ea.pop[np.argmax(fitnesses)], args.task)
-
+        ea.tell(fitnesses, args.task, SEED)
+        print(ea.fitnesses[0], np.mean(ea.fitnesses))
+        if (max(fitnesses) > 10):
+            simulate(pop[0], args.task)
+    ea.write_history(args.output)
 
 def simulate(ind, task):
     env = gym.make(task)
@@ -90,6 +90,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--config', help='Configuration file')
     parser.add_argument('-g', '--generation', help='Generation number')
     parser.add_argument('-n', '--num_workers', help='Number of cores', default=1)
+    parser.add_argument('-o', '--output', help='output file')
     args = parser.parse_args()
 
     main(args)

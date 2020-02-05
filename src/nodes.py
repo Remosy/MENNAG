@@ -26,7 +26,7 @@ class Root():
 
     def __init__(self, config=None):
         self.ID = ''
-        self.depth = 0
+        self.depth = -1
         self.config = config
         if (self.config.feedforward):
             self.nn = FeedForward(self.config)
@@ -37,6 +37,7 @@ class Root():
 
     def compile(self):
         self.child[0].ID = ''
+        self.child[0].update_depth()
         self.child[0].compile()
         self.neuronSet = self.child[0].neuronSet
         self.connSet = self.child[0].connSet
@@ -291,6 +292,8 @@ class TreeNode():
     def deepcopy(self, newParent):
         copy = self.__class__(newParent)
         copy.rule = self.rule
+        copy.depth = self.depth
+        copy.ID = self.ID
         for i in range(3):
             if (self.child[i] is not None):
                 copy.child[i] = self.child[i].deepcopy(copy)
@@ -316,7 +319,7 @@ class Div(TreeNode):
                 else:
                     # Rule #2 DIV -> CLONES DIV CONNS
                     self.rule = 2
-            elif (number < 1 / (self.depth**0.5)):
+            elif (number < 1 / (self.depth**2 + 1e-5)):
                 # Rule #0 DIV -> DIV DIV CONNS
                 self.rule = 0
             else:
@@ -351,7 +354,7 @@ class Div(TreeNode):
         self.reset()
         self.child[0].ID = self.ID + '0'
         self.child[1].ID = self.ID + '1'
-        if (self.rule == 3):
+        if (self.rule == 2):
             self.child[1].compile()
             self.child[0].compile()
             self.child[2].compile()
@@ -535,7 +538,7 @@ class Conn(TreeNode):
     def deepcopy(self, newParent):
         copy = Conn(newParent)
         copy.sourceAddon = self.sourceAddon
-        copy.targetAddon = self.sourceAddon
+        copy.targetAddon = self.targetAddon
         copy.sourceTail = self.sourceTail
         copy.targetTail = self.targetTail
         copy.weight = self.weight

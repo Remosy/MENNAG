@@ -1,13 +1,17 @@
 import numpy as np
 from configs import Configs
 from nodes import Root
+from history import History
 import json
+import pickle
 
 
 class EA():
 
-    def __init__(self):
+    def __init__(self, taskNum):
         self.pop = []
+        self.taskNum = taskNum
+        self.history = History(taskNum)
 
     def ask(self):
         if (len(self.pop) == 0):
@@ -21,11 +25,13 @@ class EA():
             self.reproduce()
             return self.pop
 
-    def tell(self, fitnesses):
+    def tell(self, fitnesses, task, seed):
         self.fitnesses = fitnesses
         keys = np.flip(np.argsort(self.fitnesses)).tolist()
         pop = [self.pop[i] for i in keys]
         self.pop = pop
+        self.fitnesses = [self.fitnesses[i] for i in keys]
+        self.history.append(task, seed, self.pop[0], self.fitnesses)
 
     def rank(self):
         rank = np.argsort(self.fitnesses)
@@ -35,8 +41,8 @@ class EA():
         newPop = []
         popSize = self.config.pop_size
         elitismRatio = self.config.elitism_ratio
-        p = np.flip(np.array(range(self.config.pop_size)))
-        p = (p + 1) / sum(p + 1)
+        p = np.flip(np.array(range(self.config.pop_size))) + 1
+        p = p / sum(p)
         while (len(newPop) < round(popSize * self.config.cross_rate)):
             parent1 = np.random.choice(self.pop, p=p)
             parent2 = np.random.choice(self.pop, p=p)
@@ -58,3 +64,8 @@ class EA():
             configDict = json.load(configFile)
         self.config = Configs(configDict)
         self.fitnesses = np.zeros((self.config.pop_size))
+
+    def write_history(self, filename):
+        outfile = open(filename, 'wb')
+        pickle.dump(self.history, outfile)
+        outfile.close()
