@@ -1,8 +1,8 @@
 {
-  "pop_size": 100,
+  "pop_size": 2000,
   "elitism_ratio": 0.01,
-  "cross_rate": 0.3,
-  "max_depth": 6,
+  "cross_rate": 0,
+  "max_depth": 8,
   "input_size": 24,
   "output_size": 4,
   "feedforward": "True",

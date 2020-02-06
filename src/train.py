@@ -34,8 +34,7 @@ def main(args):
                 fitnesses.extend(r[0])
         ea.tell(fitnesses, args.task, SEED)
         print(ea.fitnesses[0], np.mean(ea.fitnesses))
-        if (max(fitnesses) > 10):
-            simulate(pop[0], args.task)
+
     ea.write_history(args.output)
 
 def simulate(ind, task):

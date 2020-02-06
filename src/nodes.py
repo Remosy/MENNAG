@@ -311,15 +311,14 @@ class Div(TreeNode):
             # Rule #3 DIV -> CELL CELL
             self.rule = 3
         else:
-            number = random.random()
-            if (number < 0.2):
+            if (random.random() < 0.01):
                 if (random.random() < 0.5):
                     # Rule #1 DIV -> DIV CLONES CONNS
                     self.rule = 1
                 else:
                     # Rule #2 DIV -> CLONES DIV CONNS
                     self.rule = 2
-            elif (number < 1 / (self.depth**2 + 1e-5)):
+            elif (random.random() < 1 / (self.depth**2 + 1e-5)):
                 # Rule #0 DIV -> DIV DIV CONNS
                 self.rule = 0
             else:
