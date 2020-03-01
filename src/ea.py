@@ -1,7 +1,7 @@
 import numpy as np
 from configs import Configs
 from nodes import Root
-from history import History
+from history import HistItem
 import json
 import pickle
 
@@ -11,7 +11,7 @@ class EA():
     def __init__(self, taskNum):
         self.pop = []
         self.taskNum = taskNum
-        self.history = History(taskNum)
+        self.writeInit = False
 
     def ask(self):
         if (len(self.pop) == 0):
@@ -31,7 +31,7 @@ class EA():
         pop = [self.pop[i] for i in keys]
         self.pop = pop
         self.fitnesses = [self.fitnesses[i] for i in keys]
-        self.history.append(task, seed, self.pop[0], self.fitnesses)
+        self.histItem = HistItem(task, seed, self.pop[0], self.fitnesses[0])
 
     def rank(self):
         rank = np.argsort(self.fitnesses)
@@ -51,7 +51,9 @@ class EA():
                 offspring.compile()
                 newPop.append(offspring)
         for i in range(round(popSize * elitismRatio)):
-            newPop.append(self.pop[i].deepcopy())
+            offspring = self.pop[i].deepcopy()
+            offspring.compile()
+            newPop.append(offspring)
         while(len(newPop) < popSize):
             offspring = np.random.choice(self.pop, p=p).deepcopy()
             offspring.mutate()
@@ -66,6 +68,10 @@ class EA():
         self.fitnesses = np.zeros((self.config.pop_size))
 
     def write_history(self, filename):
-        outfile = open(filename, 'wb')
-        pickle.dump(self.history, outfile)
+        if (not self.writeInit):
+            outfile = open(filename, 'wb')
+            self.writeInit = True
+        else:
+            outfile = open(filename, 'ab')
+        pickle.dump(self.histItem, outfile)
         outfile.close()

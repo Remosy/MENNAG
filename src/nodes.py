@@ -6,30 +6,12 @@ from nn.feedforward import FeedForward
 import pdb
 
 
-def get_all_nodes_with_rule(pointer, type, rule, nodeList):
-    if ((isinstance(pointer, type)) and (pointer.rule == rule)):
-        nodeList.append(pointer)
-    for c in pointer.child:
-        if (c is not None):
-            get_all_nodes_with_rule(c, type, rule, nodeList)
-
-
-def get_all_nodes(pointer, type, nodeList):
-    if (isinstance(pointer, type)):
-        nodeList.append(pointer)
-    for c in pointer.child:
-        if (c is not None):
-            get_all_nodes(c, type, nodeList)
-
-
 class Root():
 
     def __init__(self, config=None):
         self.ID = ''
         self.depth = -1
         self.config = config
-        if (self.config.feedforward):
-            self.nn = FeedForward(self.config)
 
     def generate(self):
         self.child = [Div(self), None, None]
@@ -65,6 +47,9 @@ class Root():
         self.nn.compile()
         return self.nn
 
+    def detach(self):
+        self.nn = None
+
     def mutate(self):
         n0 = random.random()
         insertionThreshold = self.config.insertion_rate
@@ -96,12 +81,13 @@ class Root():
                 return None
         return pointer
 
-    def get_all_nodes(self, type=None, rule=None):
+    def get_all_nodes(self, type=None, rule=None, depth=None):
         candidates = []
         for n in self.nodeSet:
             if ((type is None) or (isinstance(n, type))):
                 if ((rule is None) or (n.rule == rule)):
-                    candidates.append(n)
+                    if ((depth is None) or (n.depth == depth)):
+                        candidates.append(n)
         return candidates
 
     def insert_at_div(self, type):
@@ -204,14 +190,23 @@ class Root():
     def cross_with(self, p2):
         offspring = self.deepcopy()
         p1nodes = offspring.get_all_nodes(type=Div)
-        p2nodes = p2.get_all_nodes(type=Div)
-        Div1 = random.choice(p1nodes)
-        Div2 = random.choice(p2nodes).deepcopy(Div1.parent)
-        if (Div1.parent.child[0] == Div1):
-            Div1.parent.child[0] = Div2
+        p2nodes = []
+        zero = False
+        while(len(p2nodes) == 0):
+            zero = True
+            div1 = random.choice(p1nodes)
+            p2nodes = p2.get_all_nodes(type=Div, depth=min(div1.depth, p2.max_depth_from_current()))
+        div2 = random.choice(p2nodes).deepcopy(div1.parent)
+        if (div1.depth > div2.depth):
+            print(div1.depth, div2.depth, p2.max_depth_from_current())
+        if (div1.parent.child[0] == div1):
+            div1.parent.child[0] = div2
         else:
-            Div1.parent.child[1] = Div2
+            div1.parent.child[1] = div2
         return offspring
+
+    def max_depth_from_current(self):
+        return self.child[0].max_depth_from_current()
 
     def deepcopy(self):
         copy = Root(config=self.config)
