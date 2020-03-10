@@ -18,6 +18,7 @@ class FeedForward():
         self.input_size = input_size
         self.output_size = output_size
         self.values = []
+        self.biases = []
         self.acts = []
         self.rawConnList = []
         for i in range(self.input_size):
@@ -25,11 +26,14 @@ class FeedForward():
         for i in range(self.output_size):
             self.acts.append(get_act(1))
 
-    def add_node(self, nodeName, act):
-        self.nodeNames.append(nodeName)
-        self.nodeLookup[nodeName] = self.nodeCount
-        self.acts.append(get_act(act))
-        self.nodeCount += 1
+    def add_node(self, nodeName, act, bias):
+        if (nodeName[0].isdigit()):
+            if (not (nodeName in self.nodeLookup)):
+                self.nodeNames.append(nodeName)
+                self.nodeLookup[nodeName] = self.nodeCount
+                self.acts.append(get_act(act))
+                self.biases.append(bias)
+                self.nodeCount += 1
 
     def add_conn(self, source, target, weight):
         if (source[0] == 'i'):
@@ -56,6 +60,7 @@ class FeedForward():
         queue.append(node)
 
     def compile(self):
+        self.biases = np.array(self.biases)
         self.connList.compile()
         self.connList.sort_by_source()
         nodeLabels = np.zeros(self.nodeCount, dtype=int)
@@ -74,6 +79,7 @@ class FeedForward():
     def step(self, inputs):
         self.values = np.zeros((self.nodeCount))
         self.values[0:self.input_size] = inputs
+        self.values[self.input_size:] = biases
         targetList = self.connList.connTarget
         sourceList = self.connList.connSource
         weightList = self.connList.connWeight

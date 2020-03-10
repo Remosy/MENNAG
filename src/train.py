@@ -9,14 +9,19 @@ from ea import EA
 from nodes import Root
 import time
 import psutil
+import random
 from mpi4py import MPI
 from mpi4py.futures import MPICommExecutor
-SEED = 0
 
 def mpi_main(args, executor):
     ea = EA(1)
     ea.load_config(args.config)
+    reseedPeriod = int(args.reseed)
+    seed = 0
     for i in range(int(args.generation)):
+        if ((reseedPeriod > 0) and (i % reseedPeriod == 0)):
+            seed = random.randint(0, 2**32 - 1)
+        print(seed)
         ea_time = time.time()
         pop = ea.ask()
         ea_time = time.time() - ea_time
@@ -24,15 +29,15 @@ def mpi_main(args, executor):
         workloads = []
         num_workers = int(args.num_workers) - 1
         for j in range(len(pop)):
-            workloads.append(([pop[j]], args.task, j))
+            workloads.append(([pop[j]], args.task, seed))
         eval_time = time.time()
         results = executor.map(eval, workloads)
         for r in results:
-            fitnesses.extend(r[0])
+            fitnesses.extend(r)
         eval_time = time.time() - eval_time
-        ea.tell(fitnesses, args.task, SEED)
+        ea.tell(fitnesses, args.task, seed)
         ea.write_history(args.output)
-        print(i, ea.fitnesses[0], psutil.Process(os.getpid()).memory_info().rss, ea_time, eval_time, ea.pop[0].max_depth_from_current())
+        print(i, ea.fitnesses[0], psutil.Process(os.getpid()).memory_info().rss, ea_time, eval_time, ea.pop[0].maxDepth)
 
 
 def main(args):
@@ -87,9 +92,9 @@ def simulate(ind, task):
     env.close()
 
 def eval(batches):
-    pop, task, batch_num = batches
+    pop, task, seed = batches
     env = gym.make(task)
-    #env.seed(seed=SEED)
+    env.seed(seed=seed)
     fitnesses = []
     for ind in pop:
         nn = ind.execute()
@@ -112,7 +117,7 @@ def eval(batches):
             obs = new_obs
         fitnesses.append(totalReward)
     env.close()
-    return (fitnesses, batch_num)
+    return fitnesses
 
 print(MPI.COMM_WORLD.Get_rank())
 if __name__ == '__main__':
@@ -123,6 +128,7 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--num_workers', help='Number of cores', default=1)
     parser.add_argument('-o', '--output', help='output file')
     parser.add_argument('--mpi', action='store_true')
+    parser.add_argument('--reseed', default=-1)
 
     args = parser.parse_args()
     if args.mpi:

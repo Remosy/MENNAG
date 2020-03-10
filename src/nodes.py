@@ -19,7 +19,7 @@ class Root():
 
     def compile(self):
         self.child[0].ID = ''
-        self.child[0].update_depth()
+        self.maxDepth = self.child[0].update_depth()
         self.child[0].compile()
         self.neuronSet = self.child[0].neuronSet
         self.connSet = self.child[0].connSet
@@ -29,8 +29,6 @@ class Root():
 
     def execute(self):
         self.nn = FeedForward(self.config)
-        for neuron in self.neuronSet:
-            self.nn.add_node(neuron, 1)
         for conn in self.connSet:
             source = conn[0]
             target = conn[1]
@@ -39,10 +37,14 @@ class Root():
             while (target not in self.neuronSet and target != ''):
                 target = target[:len(target) - 1]
             if (not(source == '' or target == '')):
+                self.nn.add_node(source, 1, self.neuronSet[source])
+                self.nn.add_node(target, 1, self.neuronSet[target])
                 self.nn.add_conn(source, target, conn[2])
         for inConn in self.inSet:
+            self.nn.add_node(inConn[1], 1, self.neuronSet[inConn[1]])
             self.nn.add_conn('i' + str(inConn[0]), inConn[1], inConn[2])
         for outConn in self.outSet:
+            self.nn.add_node(outConn[0], 1, self.neuronSet[outConn[0]])
             self.nn.add_conn(outConn[0], 'o' + str(outConn[1]), outConn[2])
         self.nn.compile()
         return self.nn
@@ -81,13 +83,14 @@ class Root():
                 return None
         return pointer
 
-    def get_all_nodes(self, type=None, rule=None, depth=None):
+    def get_all_nodes(self, type=None, rule=None, depth=None, maxDepth=None):
         candidates = []
         for n in self.nodeSet:
             if ((type is None) or (isinstance(n, type))):
                 if ((rule is None) or (n.rule == rule)):
                     if ((depth is None) or (n.depth == depth)):
-                        candidates.append(n)
+                        if ((maxDepth is None) or (n.maxDepth <= maxDepth)):
+                            candidates.append(n)
         return candidates
 
     def insert_at_div(self, type):
@@ -95,7 +98,11 @@ class Root():
         availRules = [0, 1, 2]
         while((len(candidates) < 1) and (len(availRules) > 1)):
             selectRule = random.choice(availRules)
-            candidates = self.get_all_nodes(type=Div, rule=selectRule)
+            candidates = self.get_all_nodes(
+                type=Div,
+                rule=selectRule,
+                maxDepth=self.config.max_depth - 1
+                )
             availRules.remove(selectRule)
         if (len(candidates) == 0):
             return 0
@@ -160,9 +167,11 @@ class Root():
     def insert_at_list(self, type):
         if (type == Clone):
             listType = Clones
+            maxDepth = self.config.max_depth - 1
         elif (type == Conn):
             listType = Conns
-        candidates = self.get_all_nodes(type=listType)
+            maxDepth = None
+        candidates = self.get_all_nodes(type=listType, maxDepth = maxDepth)
         if (len(candidates) == 0):
             return
         insertAt = random.choice(candidates)
@@ -195,18 +204,13 @@ class Root():
         while(len(p2nodes) == 0):
             zero = True
             div1 = random.choice(p1nodes)
-            p2nodes = p2.get_all_nodes(type=Div, depth=min(div1.depth, p2.max_depth_from_current()))
+            p2nodes = p2.get_all_nodes(type=Div, depth=min(div1.depth, p2.maxDepth))
         div2 = random.choice(p2nodes).deepcopy(div1.parent)
-        if (div1.depth > div2.depth):
-            print(div1.depth, div2.depth, p2.max_depth_from_current())
         if (div1.parent.child[0] == div1):
             div1.parent.child[0] = div2
         else:
             div1.parent.child[1] = div2
         return offspring
-
-    def max_depth_from_current(self):
-        return self.child[0].max_depth_from_current()
 
     def deepcopy(self):
         copy = Root(config=self.config)
@@ -226,7 +230,7 @@ class TreeNode():
         self.reset()
 
     def reset(self):
-        self.neuronSet = set()
+        self.neuronSet = {}
         self.connSet = set()
         self.inSet = set()
         self.outSet = set()
@@ -254,21 +258,11 @@ class TreeNode():
 
     def update_depth(self):
         self.depth = self.parent.depth
+        self.maxDepth = self.depth
         for c in self.child:
             if (c is not None):
-                c.update_depth()
-        return
-
-    def max_depth_from_current(self):
-        if (self.child[0] is not None):
-            leftDepth = self.child[0].max_depth_from_current()
-        else:
-            leftDepth = self.depth
-        if (self.child[1] is not None):
-            rightDepth = self.child[1].max_depth_from_current()
-        else:
-            rightDepth = self.depth
-        return max(leftDepth, rightDepth)
+                self.maxDepth = max(c.update_depth(), self.maxDepth)
+        return self.maxDepth
 
     def merge_from_children(self):
         for c in self.child:
@@ -293,6 +287,25 @@ class TreeNode():
             if (self.child[i] is not None):
                 copy.child[i] = self.child[i].deepcopy(copy)
         return copy
+
+class WeightedNode(TreeNode)
+
+    def __init__(self, parent):
+        super().__init__(parent)
+
+    def weight_gen(self):
+        mean = self.config.weight_mean
+        std = self.config.weight_std
+        self.weight = np.random.normal(mean, std)
+
+    def weight_mut(self):
+        number = random.random()
+        resetThreshold = self.config.weight_reset_rate
+        perturbThreshold = resetThreshold + self.config.weight_perturb_rate
+        if (number < resetThreshold):
+            self.generate()
+        elif (number < perturbThreshold):
+            self.weight += np.random.normal(0, self.config.perturb_std)
 
 
 class Div(TreeNode):
@@ -360,10 +373,11 @@ class Div(TreeNode):
 
     def update_depth(self):
         self.depth = self.parent.depth + 1
+        self.maxDepth = self.depth
         for c in self.child:
             if (c is not None):
-                c.update_depth()
-        return
+                self.maxDepth = max(c.update_depth(), self.maxDepth)
+        return self.maxDepth
 
 
 class Clones(TreeNode):
@@ -406,10 +420,11 @@ class Clones(TreeNode):
 
     def update_depth(self):
         self.depth = self.parent.depth + 1
+        self.maxDepth = self.depth
         for c in self.child:
             if (c is not None):
-                c.update_depth()
-        return
+                self.maxDepth = max(c.update_depth(), self.maxDepth)
+        return self.maxDepth
 
 
 class Clone(TreeNode):
@@ -478,15 +493,15 @@ class Conns(TreeNode):
         super().compile()
 
 
-class Conn(TreeNode):
+class Conn(WeightedNode):
 
     def __init__(self, parent):
         super().__init__(parent)
 
     def generate(self):
-        max_depth = self.config.max_depth
-        self.sourceTail = bin(random.getrandbits(max_depth))[2:]
-        self.targetTail = bin(random.getrandbits(max_depth))[2:]
+        maxDepth = self.config.max_depth
+        self.sourceTail = bin(random.getrandbits(maxDepth))[2:]
+        self.targetTail = bin(random.getrandbits(maxDepth))[2:]
         if (self.config.feedforward):
             # feedforward connection
             self.sourceAddon = '0'
@@ -499,10 +514,7 @@ class Conn(TreeNode):
             else:
                 self.sourceAddon = ''
                 self.targetAddon = ''
-
-        mean = self.config.weight_mean
-        std = self.config.weight_std
-        self.weight = np.random.normal(mean, std)
+        self.weight_gen
 
     def compile(self):
         self.reset()
@@ -518,16 +530,10 @@ class Conn(TreeNode):
         p = self.parent
         while(isinstance(p, Conns)):
             p = p.parent
-        return p.max_depth_from_current()
+        return p.maxDepth
 
     def mutate(self):
-        number = random.random()
-        resetThreshold = self.config.weight_reset_rate
-        perturbThreshold = resetThreshold + self.config.weight_perturb_rate
-        if (number < resetThreshold):
-            self.generate()
-        elif (number < perturbThreshold):
-            self.weight += np.random.normal(0, self.config.perturb_std)
+        self.weight_mut()
 
     def deepcopy(self, newParent):
         copy = Conn(newParent)
@@ -539,7 +545,7 @@ class Conn(TreeNode):
         return copy
 
 
-class Cell(TreeNode):
+class Cell(WeightedNode):
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -547,19 +553,22 @@ class Cell(TreeNode):
     def generate(self):
         self.child[0] = In(self)
         self.child[1] = Out(self)
-        super().generate()
+        self.weight_gen()
 
     def compile(self):
         self.reset()
-        self.neuronSet.add(self.ID)
+        self.neuronSet{self.ID} = self.weight
         self.child[0].ID = self.ID
         self.child[1].ID = self.ID
         self.child[0].compile()
         self.child[1].compile()
         self.merge_from_children()
 
+    def mutate(self):
+        self.weight_mut()
 
-class In(TreeNode):
+
+class In(WeightedNode):
     def __init__(self, parent):
         super().__init__(parent)
 
@@ -572,9 +581,7 @@ class In(TreeNode):
             # Rule #1 In -> IO in?
             self.rule = 1
             self.source = random.choice(range(0, self.config.input_size))
-            mean = self.config.weight_mean
-            std = self.config.weight_std
-            self.weight = np.random.normal(mean, std)
+        self.weight_gen()
 
     def compile(self):
         self.reset()
@@ -582,14 +589,7 @@ class In(TreeNode):
             self.inSet.add((self.source, self.ID, self.weight))
 
     def mutate(self):
-        number = random.random()
-        resetThreshold = self.config.weight_reset_rate
-        perturbThreshold = resetThreshold + self.config.weight_perturb_rate
-        if (number < resetThreshold):
-            self.generate()
-        elif (number < perturbThreshold):
-            if (self.rule == 1):
-                self.weight += np.random.normal(0, self.config.perturb_std)
+        self.weight_mut()
 
     def deepcopy(self, newParent):
         copy = In(newParent)
@@ -600,7 +600,7 @@ class In(TreeNode):
         return copy
 
 
-class Out(TreeNode):
+class Out(WeightedNode):
     def __init__(self, parent):
         super().__init__(parent)
 
@@ -613,9 +613,7 @@ class Out(TreeNode):
             # Rule #1 Out -> IO out?
             self.rule = 1
             self.target = random.choice(range(0, self.config.output_size))
-            mean = self.config.weight_mean
-            std = self.config.weight_std
-            self.weight = np.random.normal(mean, std)
+        self.weight_gen()
 
     def compile(self):
         self.reset()
@@ -623,14 +621,7 @@ class Out(TreeNode):
             self.outSet.add((self.ID, self.target, self.weight))
 
     def mutate(self):
-        number = random.random()
-        resetThreshold = self.config.weight_reset_rate
-        perturbThreshold = resetThreshold + self.config.weight_perturb_rate
-        if (number < resetThreshold):
-            self.generate()
-        elif (number < perturbThreshold):
-            if (self.rule == 1):
-                self.weight += np.random.normal(0, self.config.perturb_std)
+        self.weight_mut()
 
     def deepcopy(self, newParent):
         copy = Out(newParent)
