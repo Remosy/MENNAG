@@ -32,9 +32,9 @@ class Root():
         for conn in self.connSet:
             source = conn[0]
             target = conn[1]
-            while (source not in self.neuronSet and source != ''):
+            while (source not in self.neuronSet.keys() and source != ''):
                 source = source[:len(source) - 1]
-            while (target not in self.neuronSet and target != ''):
+            while (target not in self.neuronSet.keys() and target != ''):
                 target = target[:len(target) - 1]
             if (not(source == '' or target == '')):
                 self.nn.add_node(source, 1, self.neuronSet[source])
@@ -46,7 +46,7 @@ class Root():
         for outConn in self.outSet:
             self.nn.add_node(outConn[0], 1, self.neuronSet[outConn[0]])
             self.nn.add_conn(outConn[0], 'o' + str(outConn[1]), outConn[2])
-        self.nn.compile()
+        self.nn.add_finish()
         return self.nn
 
     def detach(self):
@@ -96,7 +96,7 @@ class Root():
     def insert_at_div(self, type):
         candidates = []
         availRules = [0, 1, 2]
-        while((len(candidates) < 1) and (len(availRules) > 1)):
+        while((len(candidates) < 1) and (len(availRules) > 0)):
             selectRule = random.choice(availRules)
             candidates = self.get_all_nodes(
                 type=Div,
@@ -288,7 +288,7 @@ class TreeNode():
                 copy.child[i] = self.child[i].deepcopy(copy)
         return copy
 
-class WeightedNode(TreeNode)
+class WeightedNode(TreeNode):
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -442,9 +442,9 @@ class Clone(TreeNode):
         sibDepth = self.sibling.depth
         argPermi = np.argsort(self.permi)
         argPermo = np.argsort(self.permo)
-        for neuron in self.sibling.neuronSet:
+        for neuron, weight in self.sibling.neuronSet.items():
             copy = self.ID + neuron[sibDepth:]
-            self.neuronSet.add(copy)
+            self.neuronSet[copy] = weight
         for conn in self.sibling.connSet:
             sourceCopy = self.ID + conn[0][sibDepth:]
             targetCopy = self.ID + conn[1][sibDepth:]
@@ -514,12 +514,12 @@ class Conn(WeightedNode):
             else:
                 self.sourceAddon = ''
                 self.targetAddon = ''
-        self.weight_gen
+        self.weight_gen()
 
     def compile(self):
         self.reset()
         self.ID = self.parent.ID
-        d = self.max_depth_from_current()
+        d = self.max_depth_from_current() + 1
         source = self.ID + self.sourceAddon + self.sourceTail
         source = source[:d]
         target = self.ID + self.targetAddon + self.targetTail
@@ -554,10 +554,11 @@ class Cell(WeightedNode):
         self.child[0] = In(self)
         self.child[1] = Out(self)
         self.weight_gen()
+        super().generate()
 
     def compile(self):
         self.reset()
-        self.neuronSet{self.ID} = self.weight
+        self.neuronSet[self.ID] = self.weight
         self.child[0].ID = self.ID
         self.child[1].ID = self.ID
         self.child[0].compile()
@@ -566,6 +567,16 @@ class Cell(WeightedNode):
 
     def mutate(self):
         self.weight_mut()
+
+    def deepcopy(self, newParent):
+        copy = Cell(newParent)
+        copy.ID = self.ID
+        copy.weight = self.weight
+        for i in range(3):
+            if (self.child[i] is not None):
+                copy.child[i] = self.child[i].deepcopy(copy)
+        return copy
+
 
 
 class In(WeightedNode):

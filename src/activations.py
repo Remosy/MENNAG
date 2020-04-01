@@ -6,7 +6,8 @@ def linear(x):
 
 
 def sigmoid(x):
-    return (1 / (1 + math.exp(-x)) - 0.5) * 2
+    x = np.clip(x, -100, 100)
+    return (1 / (1 + math.exp(-3 * x)) - 0.5) * 2
 
 
 def get_act(num):

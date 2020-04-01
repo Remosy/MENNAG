@@ -61,6 +61,7 @@ class Analyzer:
 
     def Q_metric(self, index):
         nn = self.hist.bests[index].execute()
+        nn.compile()
         n = nn.nodeCount
         m = nn.connList.connCount
         B = compute_B(nn)

@@ -26,7 +26,7 @@ class EA():
             return self.pop
 
     def tell(self, fitnesses, task, seed):
-        self.fitnesses = fitnesses
+        self.fitnesses = [np.mean(fitness) for fitness in fitnesses]
         keys = np.flip(np.argsort(self.fitnesses)).tolist()
         pop = [self.pop[i] for i in keys]
         self.pop = pop
