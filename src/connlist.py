@@ -4,21 +4,23 @@ import numpy as np
 class ConnList():
 
     def __init__(self):
-        self.connSource = []
-        self.connTarget = []
-        self.connWeight = []
+        self.connDict = {}
         self.connCount = 0
 
     def add_conn(self, source, target, weight):
-        self.connSource.append(source)
-        self.connTarget.append(target)
-        self.connWeight.append(weight)
+        if (source, target) in self.connDict:
+            self.connDict[(source, target)] += weight
+        else:
+            self.connDict[(source, target)] = weight
 
     def compile(self):
-        self.connSource = np.asarray(self.connSource, dtype=np.int16)
-        self.connTarget = np.asarray(self.connTarget, dtype=np.int16)
-        self.connWeight = np.asarray(self.connWeight, dtype=np.float16)
+        conns = [(k[0], k[1], v) for k, v in self.connDict.items()]
+        conns = list(zip(*conns))
+        self.connSource = np.asarray(conns[0], dtype=np.int)
+        self.connTarget = np.asarray(conns[1], dtype=np.int)
+        self.connWeight = np.asarray(conns[2])
         self.connCount = len(self.connSource)
+        self.connDict = None
 
     def sort_by_source(self):
         sortedIndex = np.argsort(self.connSource)
@@ -66,6 +68,22 @@ class ConnList():
         except IndexError:
             print(self.connSource)
         return np.arange(left, right)
+
+    def remove_redundent(self, indices):
+        newSources = []
+        newTargets = []
+        newWeights = []
+        for i in range(self.connCount):
+            s = indices[self.connSource[i]]
+            t = indices[self.connTarget[i]]
+            if ((s != -1) & (t != -1)):
+                newSources.append(s)
+                newTargets.append(t)
+                newWeights.append(self.connWeight[i])
+        self.connSource = np.asarray(newSources, dtype=np.int)
+        self.connTarget = np.asarray(newTargets, dtype=np.int)
+        self.connWeight = np.asarray(newWeights)
+        self.connCount = len(self.connSource)
 
     def apply_indices(self, sortedIndex):
         self.connSource = self.connSource[sortedIndex]

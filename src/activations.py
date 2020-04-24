@@ -6,7 +6,10 @@ def linear(x):
 
 
 def sigmoid(x):
-    x = np.clip(x, -100, 100)
+    if (x > 100):
+        x = 100
+    if (x < -100):
+        x = -100
     return (1 / (1 + math.exp(-3 * x)) - 0.5) * 2
 
 

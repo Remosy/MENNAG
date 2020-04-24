@@ -57,10 +57,54 @@ class FeedForward():
         nodeFlags[node] = 2
         queue.append(node)
 
+    def traverse_from_output(self, node, nodeFlags):
+        indices = self.connList.get_all_conn_indices_target(node)
+        nodeFlags[node] = 1
+        if (indices is not None):
+            toList = self.connList.connSource[indices]
+            for to in toList:
+                if (nodeFlags[to] == 0):
+                    self.traverse_from_output(to, nodeFlags)
+
+    def traverse_from_input(self, node, nodeFlags):
+        indices = self.connList.get_all_conn_indices_source(node)
+        nodeFlags[node] = 1
+        if (indices is not None):
+            toList = self.connList.connTarget[indices]
+            for to in toList:
+                if (nodeFlags[to] == 0):
+                    self.traverse_from_input(to, nodeFlags)
+
+    def remove_redundent(self):
+        self.connList.sort_by_target()
+        flags1 = np.zeros(self.nodeCount, dtype=int)
+        flags1[0:self.input_size + self.output_size] = 1
+        for i in range(self.input_size, self.input_size + self.output_size):
+            self.traverse_from_output(i, flags1)
+        flags2 = np.zeros(self.nodeCount, dtype=int)
+        flags2[0:self.input_size + self.output_size] = 1
+        self.connList.sort_by_source()
+        for i in range(self.input_size):
+            self.traverse_from_input(i, flags2)
+        flags = flags1 & flags2
+        #print(flags1,flags2,flags)
+        self.nodeCount = sum(flags)
+        newIndices = np.zeros(len(flags), dtype=int)
+        c = 0
+        for i in range(len(flags)):
+            if (flags[i] == 1):
+                newIndices[i] = c
+                c += 1
+            else:
+                newIndices[i] = -1
+        self.connList.remove_redundent(newIndices)
+
     def add_finish(self):
         self.biases = np.array(self.biases, dtype=np.float16)
         self.connList.compile()
+        self.remove_redundent()
         self.nodeLookup = None
+
 
     def compile(self):
         self.connList.sort_by_source()
@@ -76,9 +120,12 @@ class FeedForward():
             if (indices is not None):
                 sortIndex.extend(indices)
         self.connList.apply_indices(sortIndex)
+        if (self.connList.connCount != len(sortIndex)):
+            self.connList.connCount = len(sortIndex)
+        self.values = np.zeros((self.nodeCount))
 
     def step(self, inputs):
-        self.values = np.zeros((self.nodeCount))
+        self.values.fill(0)
         self.values[0:self.input_size] = inputs
         #self.values[self.input_size + self.output_size:] = self.biases
         targetList = self.connList.connTarget
@@ -102,5 +149,6 @@ class FeedForward():
                     break
                 prev = targetList[i]
         except IndexError:
-            print('step index error', i, connCount, len(targetList))
+            print('step index error', i, connCount, len(targetList), len(self.rawConnList))
+            quit()
         return self.values[self.input_size:self.input_size + self.output_size]

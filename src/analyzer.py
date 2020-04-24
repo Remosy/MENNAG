@@ -53,6 +53,17 @@ def compute_B(nn):
             B[i, j] -= k[i] * k[j] / (2 * m)
     return B
 
+def Q(nn):
+    nn.compile()
+    n = nn.nodeCount
+    m = nn.connList.connCount
+    if (m < 1):
+        return 0, []
+    B = compute_B(nn)
+    Q, groups = Q_divide(B, list(range(n)), True)
+    Q = Q / (4 * m)
+    return (Q, groups)
+
 
 class Analyzer:
 

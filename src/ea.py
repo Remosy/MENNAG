@@ -18,20 +18,24 @@ class EA():
             for i in range(self.config.pop_size):
                 newInd = Root(config=self.config)
                 newInd.generate()
-                newInd.compile()
+                #newInd.compile()
                 self.pop.append(newInd)
             return self.pop
         else:
             self.reproduce()
             return self.pop
 
-    def tell(self, fitnesses, task, seed):
+    def tell(self, results, task, seed):
+        results = list(zip(*results))
+        pop = list(results[0])
+        fitnesses = list(results[1])
+        Q = list(results[2])
         self.fitnesses = [np.mean(fitness) for fitness in fitnesses]
         keys = np.flip(np.argsort(self.fitnesses)).tolist()
-        pop = [self.pop[i] for i in keys]
-        self.pop = pop
+        self.pop = [pop[i] for i in keys]
         self.fitnesses = [self.fitnesses[i] for i in keys]
-        self.histItem = HistItem(task, seed, self.pop[0], self.fitnesses[0])
+        self.Q = [Q[i] for i in keys]
+        self.histItem = HistItem(task, seed, self.pop[0], self.fitnesses[0], self.Q)
 
     def rank(self):
         rank = np.argsort(self.fitnesses)
@@ -48,16 +52,16 @@ class EA():
             parent2 = np.random.choice(self.pop, p=p)
             if (parent1 != parent2):
                 offspring = parent1.cross_with(parent2)
-                offspring.compile()
+                #offspring.compile()
                 newPop.append(offspring)
         for i in range(round(popSize * elitismRatio)):
             offspring = self.pop[i].deepcopy()
-            offspring.compile()
+            #offspring.compile()
             newPop.append(offspring)
         while(len(newPop) < popSize):
             offspring = np.random.choice(self.pop, p=p).deepcopy()
             offspring.mutate()
-            offspring.compile()
+            #offspring.compile()
             newPop.append(offspring)
         self.pop = newPop
 

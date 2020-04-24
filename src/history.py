@@ -10,6 +10,7 @@ class History():
         self.bests = []
         self.fitnesses = []
         self.bestFit = []
+        self.Q = []
 
     def load(self, filename):
         infile = open(filename, 'rb')
@@ -20,15 +21,17 @@ class History():
                 self.seeds.append(item.seed)
                 self.bests.append(item.best)
                 self.fitnesses.append(item.fitness)
+                self.Q.append(item.Q)
             except (EOFError, UnpicklingError):
                 break
         infile.close()
 
 class HistItem():
 
-    def __init__(self, task, seed, best, fitness):
+    def __init__(self, task, seed, best, fitness, Q):
         self.task = task
         self.seed = seed
         best.detach()
         self.best = best
         self.fitness = fitness
+        self.Q = Q

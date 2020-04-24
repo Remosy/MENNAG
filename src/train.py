@@ -11,9 +11,10 @@ import time
 import psutil
 import random
 import gc
+from tasks.task import get_task
 from mpi4py import MPI
 from mpi4py.futures import MPICommExecutor
-from visualizer.individualvisualizer import IndividualVisualizer
+from analyzer import Q
 
 def mpi_main(args):
     ea = EA(1)
@@ -37,7 +38,7 @@ def mpi_main(args):
         gc.collect()
         prep_time = time.time()
         for j in range(len(pop)):
-            workloads.append((pop[j].execute(), args.task, seed))
+            workloads.append((pop[j], args.task, seed))
         prep_time = time.time() - prep_time
         eval_time = time.time()
         success = False
@@ -52,38 +53,44 @@ def mpi_main(args):
         eval_time = time.time() - eval_time
         ea.tell(results, args.task, seed)
         ea.write_history(args.output)
-        print(i, ea.fitnesses[0], psutil.Process(os.getpid()).memory_info().rss, ea_time, prep_time, eval_time, ea.pop[0].maxDepth)
-    best = ea.pop[0]
-    eval((best.execute(), args.task, seed), debug = True)
-
+        print(i, ea.fitnesses[0], np.mean(ea.Q), ea_time, prep_time, eval_time, ea.pop[0].maxDepth)
 
 def main(args):
     ea = EA(1)
     ea.load_config(args.config)
+    reseedPeriod = int(args.reseed)
+    taskNum = int(args.task_num)
+    np.random.seed(0)
+    seed = np.random.randint(0, 2**32 - 1, size=(taskNum), dtype=np.uint32)
+    seed = seed.tolist()
+    print(seed)
     for i in range(int(args.generation)):
+        if ((reseedPeriod > 0) and (i % reseedPeriod == 0)):
+            for j in range(taskNum):
+                seed[j] = random.randint(0, 2**32 - 1)
         ea_time = time.time()
         pop = ea.ask()
-        fitnesses = []
         ea_time = time.time() - ea_time
-        num_workers = int(args.num_workers)
-        if (num_workers == 1):
-            fitnesses = eval((pop, args.task, 0))[0]
-        else:
-            batch_indices = np.linspace(0, len(pop), num_workers + 1).astype(int)
-            batches = []
-            for j in range(num_workers):
-                batches.append((
-                    pop[batch_indices[j]:batch_indices[j + 1]],
-                    args.task,
-                    j))
-            eval_time = time.time()
+        fitnesses = []
+        workloads = []
+        num_workers = int(args.num_workers) - 1
+        gc.collect()
+        prep_time = time.time()
+        for j in range(len(pop)):
+            workloads.append((pop[j], args.task, seed))
+        prep_time = time.time() - prep_time
+        eval_time = time.time()
+        if (num_workers > 1):
             with mp.Pool(num_workers) as pool:
-                results = pool.map(eval, batches)
-            eval_time = time.time() - eval_time
-        ea.tell(resultss, args.task, SEED)
+                results = pool.map(eval, workloads)
+        else:
+            results = []
+            for w in workloads:
+                results.append(eval(w))
+        eval_time = time.time() - eval_time
+        ea.tell(results, args.task, seed)
         ea.write_history(args.output)
-        print(i, ea.fitnesses[0], psutil.Process(os.getpid()).memory_info().rss, ea_time, eval_time)
-
+        print(i, ea.fitnesses[0], np.mean(ea.Q), ea_time, prep_time, eval_time, ea.pop[0].maxDepth)
 
 def simulate(ind, task):
     env = gym.make(task)
@@ -107,9 +114,11 @@ def simulate(ind, task):
 
 def eval(batches, debug=False, render=False):
     try:
-        nn, task, seeds = batches
-        env = gym.make(task)
+        pop, task, seeds = batches
+        env = get_task(task)
         fitnesses = []
+        pop.compile()
+        nn = pop.execute()
         nn.compile()
         for seed in seeds:
             env.seed(seed=seed)
@@ -117,7 +126,7 @@ def eval(batches, debug=False, render=False):
             done = False
             totalReward = 0
             while (not done):
-                if (task == 'CartPole-v1'):
+                if (task in ('CartPole-v1', 'Retina', 'RetinaNM')):
                     action = nn.step(obs)[0]
                     if (action > 0):
                         action = 1
@@ -129,17 +138,21 @@ def eval(batches, debug=False, render=False):
                     print(action, obs)
                 new_obs, reward, done, info = env.step(action)
                 totalReward += reward
+                if (task == 'BipedalWalker-v3'):
+                    if (max(abs(obs - new_obs)) < 1e-5):
+                        done = True
                 obs = new_obs
                 if render:
                     env.render()
             fitnesses.append(totalReward)
             env.close()
-        fitnesses = np.array(fitnesses, dtype=np.float16)
+        fitnesses = np.array(fitnesses)
+        result = Q(nn)
+        Q_value, groups = result
     except OverflowError:
         print("OVERFLOW IN EVAL")
-    return fitnesses
+    return (pop, fitnesses, Q_value)
 
-print(MPI.COMM_WORLD.Get_rank())
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--task', help='Task name')
@@ -150,8 +163,10 @@ if __name__ == '__main__':
     parser.add_argument('--mpi', action='store_true')
     parser.add_argument('--reseed', default=-1)
     parser.add_argument('--task_num', default=1)
+    parser.add_argument('--debug', action='store_true')
 
     args = parser.parse_args()
+    print(args.mpi)
     if args.mpi:
         mpi_main(args)
     else:

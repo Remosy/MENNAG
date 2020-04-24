@@ -272,6 +272,7 @@ class TreeNode():
                 self.outSet.update(c.outSet)
                 self.inSet.update(c.inSet)
                 self.nodeSet.update(c.nodeSet)
+                c.reset()
 
     def get_pos(self):
         for i in range(3):
