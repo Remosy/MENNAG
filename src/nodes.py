@@ -37,14 +37,14 @@ class Root():
             while (target not in self.neuronSet.keys() and target != ''):
                 target = target[:len(target) - 1]
             if (not(source == '' or target == '')):
-                self.nn.add_node(source, 1, self.neuronSet[source])
-                self.nn.add_node(target, 1, self.neuronSet[target])
+                self.nn.add_node(source, self.neuronSet[source])
+                self.nn.add_node(target, self.neuronSet[target])
                 self.nn.add_conn(source, target, conn[2])
         for inConn in self.inSet:
-            self.nn.add_node(inConn[1], 1, self.neuronSet[inConn[1]])
+            self.nn.add_node(inConn[1], self.neuronSet[inConn[1]])
             self.nn.add_conn('i' + str(inConn[0]), inConn[1], inConn[2])
         for outConn in self.outSet:
-            self.nn.add_node(outConn[0], 1, self.neuronSet[outConn[0]])
+            self.nn.add_node(outConn[0], self.neuronSet[outConn[0]])
             self.nn.add_conn(outConn[0], 'o' + str(outConn[1]), outConn[2])
         self.nn.add_finish()
         return self.nn
@@ -555,11 +555,12 @@ class Cell(WeightedNode):
         self.child[0] = In(self)
         self.child[1] = Out(self)
         self.weight_gen()
+        self.act = np.random.choice(self.config.avail_acts)
         super().generate()
 
     def compile(self):
         self.reset()
-        self.neuronSet[self.ID] = self.weight
+        self.neuronSet[self.ID] = (self.weight, self.act)
         self.child[0].ID = self.ID
         self.child[1].ID = self.ID
         self.child[0].compile()
@@ -568,11 +569,15 @@ class Cell(WeightedNode):
 
     def mutate(self):
         self.weight_mut()
+        number = random.random()
+        if (number < self.config.acts_mut_rate):
+            self.act = np.random.choice(self.config.avail_acts)
 
     def deepcopy(self, newParent):
         copy = Cell(newParent)
         copy.ID = self.ID
         copy.weight = self.weight
+        copy.act = self.act
         for i in range(3):
             if (self.child[i] is not None):
                 copy.child[i] = self.child[i].deepcopy(copy)

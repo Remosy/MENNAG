@@ -13,15 +13,15 @@ class Retina:
     def __init__(self):
         self.seed()
         fourBits = list(range(16))
-        self.pl = self.np_random.choice(fourBits, 8)
-        self.pr = self.np_random.choice(fourBits, 8)
+        self.pl = self.np_random.choice(fourBits, 8, replace=False)
+        self.pr = self.np_random.choice(fourBits, 8, replace=False)
         self.current = 0
 
     def reset(self):
         self.current = 0
         fourBits = list(range(16))
-        self.pl = self.np_random.choice(fourBits, 8)
-        self.pr = self.np_random.choice(fourBits, 8)
+        self.pl = self.np_random.choice(fourBits, 8, replace=False)
+        self.pr = self.np_random.choice(fourBits, 8, replace=False)
         return self.get_state()
 
     def step(self, action):

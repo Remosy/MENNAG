@@ -19,3 +19,12 @@ class Configs():
         self.insertion_rate = dict['insertion_rate']
         self.deletion_rate = dict['deletion_rate']
         self.random_tree_rate = dict['random_tree_rate']
+        if 'metric' in dict:
+            self.metric = dict['metric']
+        else:
+            self.metric = 'fit'
+        if 'avail_acts' in dict:
+            self.avail_acts = dict['avail_acts']
+        else:
+            self.avail_acts = [1]
+        self.acts_mut_rate = dict['acts_mut_rate']

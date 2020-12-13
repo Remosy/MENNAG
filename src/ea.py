@@ -1,7 +1,6 @@
 import numpy as np
 from configs import Configs
 from nodes import Root
-from history import HistItem
 import json
 import pickle
 
@@ -26,16 +25,10 @@ class EA():
             return self.pop
 
     def tell(self, results, task, seed):
-        results = list(zip(*results))
-        pop = list(results[0])
-        fitnesses = list(results[1])
-        Q = list(results[2])
-        self.fitnesses = [np.mean(fitness) for fitness in fitnesses]
-        keys = np.flip(np.argsort(self.fitnesses)).tolist()
-        self.pop = [pop[i] for i in keys]
-        self.fitnesses = [self.fitnesses[i] for i in keys]
-        self.Q = [Q[i] for i in keys]
-        self.histItem = HistItem(task, seed, self.pop[0], self.fitnesses[0], self.Q)
+        self.results = results
+        self.pop = results.get_res('pop')
+        self.fitnesses = results.get_metric()
+        results.summarise()
 
     def rank(self):
         rank = np.argsort(self.fitnesses)
@@ -77,5 +70,5 @@ class EA():
             self.writeInit = True
         else:
             outfile = open(filename, 'ab')
-        pickle.dump(self.histItem, outfile)
+        pickle.dump(self.results, outfile)
         outfile.close()

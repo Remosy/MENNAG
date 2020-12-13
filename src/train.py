@@ -1,6 +1,7 @@
 import os
 import sys
 sys.path.append(os.getcwd() + '/src')
+os.environ['MKL_NUM_THREADS'] = '1'
 import argparse
 import numpy as np
 import gym
@@ -11,17 +12,20 @@ import time
 import psutil
 import random
 import gc
-from tasks.task import get_task
 from mpi4py import MPI
 from mpi4py.futures import MPICommExecutor
-from analyzer import Q
+
+from eval.eval import eval, EvalSummary
+
+DEBUG_FLAG = False
 
 def mpi_main(args):
+    DEBUG_FLAG = args.debug
     ea = EA(1)
     ea.load_config(args.config)
     reseedPeriod = int(args.reseed)
     taskNum = int(args.task_num)
-    np.random.seed(0)
+    np.random.seed(1)
     seed = np.random.randint(0, 2**32 - 1, size=(taskNum), dtype=np.uint32)
     seed = seed.tolist()
     print(seed)
@@ -38,7 +42,7 @@ def mpi_main(args):
         gc.collect()
         prep_time = time.time()
         for j in range(len(pop)):
-            workloads.append((pop[j], args.task, seed))
+            workloads.append((pop[j], args.task, seed, args.debug))
         prep_time = time.time() - prep_time
         eval_time = time.time()
         success = False
@@ -51,9 +55,21 @@ def mpi_main(args):
             except OverflowError:
                 success = False
         eval_time = time.time() - eval_time
-        ea.tell(results, args.task, seed)
+        reducedResult = EvalSummary()
+        reducedResult.reduce(results, 'pfit')
+        ea.tell(reducedResult, args.task, seed)
         ea.write_history(args.output)
-        print(i, ea.fitnesses[0], np.mean(ea.Q), ea_time, prep_time, eval_time, ea.pop[0].maxDepth)
+        #print(ea.fitnesses)
+        print('iter: {0} fit: {1}, pfit:{7} Q: {2}, ea_time: {3}, prep_time: {4}, eval_time: {5}, max_depth:{6}'.format(
+                i,
+                ea.fitnesses[0],
+                np.mean(reducedResult.get_res('Q')[0]),
+                ea_time,
+                prep_time,
+                eval_time,
+                ea.pop[0].maxDepth,
+                np.mean(reducedResult.get_res('pfit')[0])
+            ))
 
 def main(args):
     ea = EA(1)
@@ -90,68 +106,10 @@ def main(args):
         eval_time = time.time() - eval_time
         ea.tell(results, args.task, seed)
         ea.write_history(args.output)
-        print(i, ea.fitnesses[0], np.mean(ea.Q), ea_time, prep_time, eval_time, ea.pop[0].maxDepth)
+        print('iter: {0} fit: {1}, Q: {2}, ea_time: {3}, prep_time: {4}, eval_time: {5}, max_depth:{6}'.format(
+            i, ea.fitnesses[0], np.mean(ea.Q), ea_time, prep_time, eval_time, ea.pop[0].maxDepth))
 
-def simulate(ind, task):
-    env = gym.make(task)
-    env.seed(seed=SEED)
-    nn = ind.execute()
-    obs = env.reset()
-    done = False
-    totalReward = 0
-    while (not done):
-        if (task == 'CartPole-v1'):
-            action = nn.step(obs)[0]
-            if (action > 0):
-                action = 1
-            else:
-                action = 0
-        else:
-            action = nn.step(obs) * env.action_space.high
-        obs, reward, done, info = env.step(action)
-        env.render()
-    env.close()
 
-def eval(batches, debug=False, render=False):
-    try:
-        pop, task, seeds = batches
-        env = get_task(task)
-        fitnesses = []
-        pop.compile()
-        nn = pop.execute()
-        nn.compile()
-        for seed in seeds:
-            env.seed(seed=seed)
-            obs = env.reset()
-            done = False
-            totalReward = 0
-            while (not done):
-                if (task in ('CartPole-v1', 'Retina', 'RetinaNM')):
-                    action = nn.step(obs)[0]
-                    if (action > 0):
-                        action = 1
-                    else:
-                        action = 0
-                else:
-                    action = nn.step(obs) * env.action_space.high
-                if (debug):
-                    print(action, obs)
-                new_obs, reward, done, info = env.step(action)
-                totalReward += reward
-                if (task == 'BipedalWalker-v3'):
-                    if (max(abs(obs - new_obs)) < 1e-5):
-                        done = True
-                obs = new_obs
-                if render:
-                    env.render()
-            fitnesses.append(totalReward)
-            env.close()
-        fitnesses = np.array(fitnesses)
-        result = Q(nn)
-        Q_value, groups = result
-    except OverflowError:
-        print("OVERFLOW IN EVAL")
-    return (pop, fitnesses, Q_value)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
